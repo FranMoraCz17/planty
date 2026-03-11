@@ -1,5 +1,5 @@
-import UserProfile from "@/src/screens/userProfile/UserProfile";
+import { Redirect } from "expo-router";
 
 export default function Index() {
-  return <UserProfile />;
+  return <Redirect href="/(app)/(tabs)" />;
 }

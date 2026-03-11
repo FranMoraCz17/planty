@@ -41,3 +41,8 @@ app-example
 # generated native folders
 /ios
 /android
+
+# local coursework docs
+docs/
+docs/img
+docs/actividad1-investigacion.md

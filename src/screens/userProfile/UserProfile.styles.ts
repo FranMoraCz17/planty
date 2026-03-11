@@ -1,28 +1,27 @@
 import { StyleSheet } from "react-native";
+import {
+  BorderRadius,
+  Colors,
+  Spacing,
+  Typography,
+} from "@/src/theme/designSystem";
 
 const COLORS = {
-  primary: "#2F5D3A",
-  secondary: "#6E8B5E",
-  background: "#F4F2ED",
-  cardBackground: "#FFFFFF",
-  beigeLight: "#EDEAE4",
-  textPrimary: "#1F2F22",
-  textSecondary: "#6B7C6B",
-  chipBackground: "#C8DBC4",
-  chipText: "#2F5D3A",
-  divider: "#E5E3DC",
-  accentGreen: "#4A8159",
+  primary: Colors.primary,
+  secondary: Colors.secondary,
+  background: Colors.surface,
+  cardBackground: Colors.surfaceCard,
+  beigeLight: "#E7EFE4",
+  textPrimary: Colors.text,
+  textSecondary: Colors.textSecondary,
+  chipBackground: "#D0E2CA",
+  chipText: Colors.primary,
+  divider: Colors.border,
+  accentGreen: Colors.secondary,
   shadow: "#000000",
 };
 
-const SPACING = {
-  xs: 4,
-  sm: 8,
-  md: 16,
-  lg: 24,
-  xl: 32,
-  xxl: 40,
-};
+const SPACING = Spacing;
 
 export const styles = StyleSheet.create({
   container: {
@@ -38,24 +37,24 @@ export const styles = StyleSheet.create({
 
   header: {
     backgroundColor: COLORS.primary,
-    height: 100,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
+    height: 116,
+    borderBottomLeftRadius: BorderRadius.lg,
+    borderBottomRightRadius: BorderRadius.lg,
   },
 
   avatarSection: {
     alignItems: "center",
-    marginTop: -50,
+    marginTop: -56,
     marginBottom: SPACING.sm,
   },
   avatarContainer: {
     position: "relative",
   },
   avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 5,
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    borderWidth: 4,
     borderColor: COLORS.cardBackground,
     shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 4 },
@@ -65,15 +64,15 @@ export const styles = StyleSheet.create({
   },
   editButton: {
     position: "absolute",
-    bottom: 2,
-    right: 2,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    bottom: 0,
+    right: 0,
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.full,
     backgroundColor: COLORS.secondary,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 3,
+    borderWidth: 2,
     borderColor: COLORS.cardBackground,
     shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 2 },
@@ -82,41 +81,41 @@ export const styles = StyleSheet.create({
     elevation: 4,
   },
   editButtonText: {
-    fontSize: 13,
+    fontSize: Typography.body.fontSize,
     color: COLORS.cardBackground,
     fontWeight: "600",
   },
 
   nameSection: {
     alignItems: "center",
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.lg,
     paddingHorizontal: SPACING.md,
   },
   name: {
-    fontSize: 26,
-    fontWeight: "800",
+    fontSize: Typography.title.fontSize,
+    fontWeight: Typography.title.fontWeight,
     color: COLORS.textPrimary,
     marginBottom: 2,
     letterSpacing: -0.5,
   },
   username: {
-    fontSize: 14,
+    fontSize: Typography.body.fontSize - 2,
     color: COLORS.textSecondary,
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.lg,
     fontWeight: "500",
   },
 
   levelCompactContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.md,
     gap: SPACING.sm,
   },
   levelCompact: {
     backgroundColor: COLORS.beigeLight,
     paddingHorizontal: 12,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: BorderRadius.md,
   },
   levelCompactText: {
     fontSize: 11,
@@ -129,7 +128,7 @@ export const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: BorderRadius.md,
   },
   badgeCompactText: {
     fontSize: 10,
@@ -143,7 +142,7 @@ export const styles = StyleSheet.create({
     backgroundColor: COLORS.chipBackground,
     paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 14,
+    borderRadius: BorderRadius.md,
   },
   privacyText: {
     fontSize: 11,
@@ -154,9 +153,9 @@ export const styles = StyleSheet.create({
   summaryStrip: {
     flexDirection: "row",
     backgroundColor: COLORS.cardBackground,
-    borderRadius: 20,
+    borderRadius: BorderRadius.lg,
     marginHorizontal: SPACING.md,
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.lg,
     paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.xs,
     shadowColor: COLORS.shadow,
@@ -171,7 +170,7 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
   },
   summaryNumber: {
-    fontSize: 26,
+    fontSize: Typography.title.fontSize,
     fontWeight: "800",
     color: COLORS.primary,
     marginBottom: 2,
@@ -190,7 +189,7 @@ export const styles = StyleSheet.create({
   },
 
   categoriesSection: {
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.lg,
   },
   categoriesScroll: {
     paddingHorizontal: SPACING.md,
@@ -200,7 +199,7 @@ export const styles = StyleSheet.create({
     backgroundColor: COLORS.chipBackground,
     paddingHorizontal: 18,
     paddingVertical: 10,
-    borderRadius: 24,
+    borderRadius: BorderRadius.full,
     marginRight: SPACING.sm,
   },
   categoryText: {
@@ -212,10 +211,10 @@ export const styles = StyleSheet.create({
 
   bioCard: {
     backgroundColor: COLORS.beigeLight,
-    borderRadius: 20,
+    borderRadius: BorderRadius.lg,
     padding: SPACING.md,
     marginHorizontal: SPACING.md,
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.lg,
     shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
@@ -232,14 +231,14 @@ export const styles = StyleSheet.create({
     marginRight: SPACING.sm,
   },
   bioTitle: {
-    fontSize: 14,
+    fontSize: Typography.body.fontSize - 2,
     fontWeight: "700",
     color: COLORS.textPrimary,
     textTransform: "uppercase",
     letterSpacing: 0.8,
   },
   bioText: {
-    fontSize: 14,
+    fontSize: Typography.body.fontSize - 2,
     color: COLORS.textSecondary,
     lineHeight: 21,
     textAlign: "left",
@@ -247,10 +246,10 @@ export const styles = StyleSheet.create({
 
   featuredPlantCard: {
     backgroundColor: COLORS.cardBackground,
-    borderRadius: 20,
+    borderRadius: BorderRadius.lg,
     padding: SPACING.md,
     marginHorizontal: SPACING.md,
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.lg,
     shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.08,
@@ -272,7 +271,7 @@ export const styles = StyleSheet.create({
   featuredPlantImageLarge: {
     width: 80,
     height: 80,
-    borderRadius: 16,
+    borderRadius: BorderRadius.md,
     backgroundColor: COLORS.beigeLight,
     alignItems: "center",
     justifyContent: "center",
@@ -285,7 +284,7 @@ export const styles = StyleSheet.create({
     flex: 1,
   },
   featuredPlantName: {
-    fontSize: 20,
+    fontSize: Typography.body.fontSize + 4,
     fontWeight: "700",
     color: COLORS.textPrimary,
     marginBottom: 4,
@@ -298,13 +297,13 @@ export const styles = StyleSheet.create({
   },
 
   infoSection: {
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.lg,
     paddingHorizontal: SPACING.md,
     gap: SPACING.sm,
   },
   infoCard: {
     backgroundColor: COLORS.cardBackground,
-    borderRadius: 18,
+    borderRadius: BorderRadius.lg,
     padding: SPACING.md,
     shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 2 },
@@ -321,17 +320,17 @@ export const styles = StyleSheet.create({
     fontWeight: "700",
   },
   infoValue: {
-    fontSize: 15,
+    fontSize: Typography.body.fontSize - 1,
     fontWeight: "600",
     color: COLORS.textPrimary,
   },
 
   gardenSection: {
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.lg,
   },
   gardenHeader: {
     marginHorizontal: SPACING.md,
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.lg,
   },
   gardenHeaderLabel: {
     fontSize: 10,
@@ -342,7 +341,7 @@ export const styles = StyleSheet.create({
     marginBottom: 4,
   },
   sectionTitle: {
-    fontSize: 22,
+    fontSize: Typography.title.fontSize - 2,
     fontWeight: "800",
     color: COLORS.textPrimary,
     letterSpacing: -0.5,
@@ -360,7 +359,7 @@ export const styles = StyleSheet.create({
   gardenPlaceholder: {
     flex: 1,
     backgroundColor: COLORS.cardBackground,
-    borderRadius: 16,
+    borderRadius: BorderRadius.md,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: COLORS.shadow,
@@ -377,9 +376,9 @@ export const styles = StyleSheet.create({
     position: "absolute",
     top: 6,
     right: 6,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    width: 18,
+    height: 18,
+    borderRadius: BorderRadius.full,
     backgroundColor: COLORS.accentGreen,
     alignItems: "center",
     justifyContent: "center",
@@ -396,6 +395,6 @@ export const styles = StyleSheet.create({
   },
 
   bottomSpacer: {
-    height: SPACING.lg,
+    height: SPACING.xl,
   },
 });

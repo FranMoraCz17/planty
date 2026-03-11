@@ -15,7 +15,7 @@ interface UserInterface {
   cantidadPlantas: number;
   categoriasPlantas: string[];
   racha: number;
-  cumpleaños: string;
+  cumpleanos: string;
   image: string;
   cantidadAmigos: number;
   privacidad: "publico" | "privado";
@@ -26,20 +26,20 @@ interface UserInterface {
 }
 
 const mockUser: UserInterface = {
-  nombre: "Lucía Andrade",
+  nombre: "Lucia Andrade",
   apodo: "selva_urbana",
   cantidadPlantas: 83,
-  categoriasPlantas: ["Orquídeas", "Bonsáis", "Medicinales", "Helechos"],
+  categoriasPlantas: ["Orquideas", "Bonsais", "Medicinales", "Helechos"],
   racha: 142,
-  cumpleaños: "1998-11-03",
+  cumpleanos: "1998-11-03",
   image: "https://images.unsplash.com/photo-1544725176-7c40e5a71c5e",
   cantidadAmigos: 612,
   privacidad: "publico",
   descripcion:
-    "🌿 Transformando mi apartamento en una jungla sostenible. Cultivo consciente y amor por la biodiversidad.",
+    "Transformando mi apartamento en una jungla sostenible. Cultivo consciente y amor por la biodiversidad.",
   plantaFavorita: "Ficus Lyrata",
   nivel: 27,
-  ubicacion: "San José, Costa Rica",
+  ubicacion: "San Jose, Costa Rica",
 };
 
 export default function UserProfile() {
@@ -57,8 +57,12 @@ export default function UserProfile() {
         <View style={styles.avatarSection}>
           <View style={styles.avatarContainer}>
             <Image source={{ uri: user.image }} style={styles.avatar} />
-            <TouchableOpacity style={styles.editButton}>
-              <Text style={styles.editButtonText}>✎</Text>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Editar foto de perfil"
+              style={styles.editButton}
+            >
+              <Text style={styles.editButtonText}>E</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -78,7 +82,7 @@ export default function UserProfile() {
 
           <View style={styles.privacyBadge}>
             <Text style={styles.privacyText}>
-              {user.privacidad === "publico" ? "🌍 Público" : "🔒 Privado"}
+              {user.privacidad === "publico" ? "Publico" : "Privado"}
             </Text>
           </View>
         </View>
@@ -120,7 +124,7 @@ export default function UserProfile() {
 
         <View style={styles.bioCard}>
           <View style={styles.bioHeader}>
-            <Text style={styles.bioIcon}>🌿</Text>
+            <Text style={styles.bioIcon}>Plant</Text>
             <Text style={styles.bioTitle}>Acerca de</Text>
           </View>
           <Text style={styles.bioText}>{user.descripcion}</Text>
@@ -130,14 +134,12 @@ export default function UserProfile() {
           <Text style={styles.featuredPlantLabel}>Planta destacada</Text>
           <View style={styles.featuredPlantContent}>
             <View style={styles.featuredPlantImageLarge}>
-              <Text style={styles.featuredPlantEmoji}>🪴</Text>
+              <Text style={styles.featuredPlantEmoji}>PL</Text>
             </View>
             <View style={styles.featuredPlantInfo}>
-              <Text style={styles.featuredPlantName}>
-                {user.plantaFavorita}
-              </Text>
+              <Text style={styles.featuredPlantName}>{user.plantaFavorita}</Text>
               <Text style={styles.featuredPlantSubtext}>
-                En mi colección desde 2024
+                En mi coleccion desde 2024
               </Text>
             </View>
           </View>
@@ -145,12 +147,12 @@ export default function UserProfile() {
 
         <View style={styles.infoSection}>
           <View style={styles.infoCard}>
-            <Text style={styles.infoLabel}>Cumpleaños</Text>
-            <Text style={styles.infoValue}>{user.cumpleaños}</Text>
+            <Text style={styles.infoLabel}>Cumpleanos</Text>
+            <Text style={styles.infoValue}>{user.cumpleanos}</Text>
           </View>
           {user.ubicacion && (
             <View style={styles.infoCard}>
-              <Text style={styles.infoLabel}>Ubicación</Text>
+              <Text style={styles.infoLabel}>Ubicacion</Text>
               <Text style={styles.infoValue}>{user.ubicacion}</Text>
             </View>
           )}
@@ -159,18 +161,23 @@ export default function UserProfile() {
         <View style={styles.gardenSection}>
           <View style={styles.gardenHeader}>
             <Text style={styles.gardenHeaderLabel}>Inventario activo</Text>
-            <Text style={styles.sectionTitle}>Mi Jardín</Text>
+            <Text style={styles.sectionTitle}>Mi Jardin</Text>
           </View>
           <View style={styles.gardenGrid}>
             {[1, 2, 3, 4, 5, 6].map((item) => (
-              <TouchableOpacity key={item} style={styles.gardenItem}>
+              <TouchableOpacity
+                key={item}
+                accessibilityRole="button"
+                accessibilityLabel={`Abrir planta ${item}`}
+                style={styles.gardenItem}
+              >
                 <View style={styles.gardenPlaceholder}>
                   {item === 1 && (
                     <View style={styles.recentIndicator}>
-                      <Text style={styles.recentIndicatorText}>•</Text>
+                      <Text style={styles.recentIndicatorText}>*</Text>
                     </View>
                   )}
-                  <Text style={styles.gardenPlaceholderText}>🌿</Text>
+                  <Text style={styles.gardenPlaceholderText}>PL</Text>
                 </View>
               </TouchableOpacity>
             ))}
