@@ -1,16 +1,44 @@
-export const Colors = {
-  primary: "#2F6F46",
-  secondary: "#6E9F63",
-  surface: "#F5F8F1",
-  text: "#1E2D22",
-  error: "#C13A37",
-  disabled: "#A7B7AA",
-  pressed: "#215133",
+export const LightColors = {
+  primary: "#16A34A",
+  secondary: "#84C64A",
+  surface: "#ECF8F3",
+  text: "#12342E",
+  error: "#E25D50",
+  disabled: "#9DB7AF",
+  pressed: "#12917A",
   onPrimary: "#FFFFFF",
-  textSecondary: "#5F6F62",
-  surfaceCard: "#FFFFFF",
-  border: "#D9E1D5",
+  textSecondary: "#4F6F68",
+  surfaceCard: "#F9FFFC",
+  border: "#CFE5DD",
+  accentWarm: "#F6A623",
+  accentCool: "#7FC8D6",
+  accentLavender: "#B9B6E8",
 } as const;
+
+export const DarkColors = {
+  primary: "#16A34A",
+  secondary: "#7EBF46",
+  surface: "#0F1C19",
+  text: "#E5F3EE",
+  error: "#EA756A",
+  disabled: "#567068",
+  pressed: "#15856E",
+  onPrimary: "#FFFFFF",
+  textSecondary: "#A4BBB3",
+  surfaceCard: "#172825",
+  border: "#2A3D37",
+  accentWarm: "#E4A640",
+  accentCool: "#64AEBB",
+  accentLavender: "#8D88C2",
+} as const;
+
+export type ThemeMode = "light" | "dark";
+export type ThemeColors = typeof LightColors;
+
+export const getThemeColors = (mode: ThemeMode): ThemeColors =>
+  mode === "dark" ? DarkColors : LightColors;
+
+export const Colors = LightColors;
 
 export const Typography = {
   family: "System",

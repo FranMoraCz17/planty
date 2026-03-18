@@ -9,10 +9,10 @@ import {
 } from "react-native";
 import {
   BorderRadius,
-  Colors,
   Spacing,
   Typography,
 } from "@/src/theme/designSystem";
+import { useAppTheme } from "@/src/theme/ThemeProvider";
 
 interface ThemedButtonProps {
   label: string;
@@ -31,6 +31,9 @@ export default function ThemedButton({
   style,
   textStyle,
 }: ThemedButtonProps) {
+  const { colors } = useAppTheme();
+  const styles = createStyles(colors);
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -52,31 +55,32 @@ export default function ThemedButton({
   );
 }
 
-const styles = StyleSheet.create({
-  button: {
-    minHeight: 48,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  buttonPressed: {
-    backgroundColor: Colors.pressed,
-  },
-  buttonDisabled: {
-    backgroundColor: Colors.disabled,
-  },
-  buttonText: {
-    fontFamily: Typography.family,
-    fontSize: Typography.body.fontSize,
-    fontWeight: "600",
-    color: Colors.onPrimary,
-    lineHeight: Typography.body.lineHeight,
-    textAlign: "center",
-  },
-  buttonTextDisabled: {
-    color: Colors.surfaceCard,
-  },
-});
+const createStyles = (colors: ReturnType<typeof useAppTheme>["colors"]) =>
+  StyleSheet.create({
+    button: {
+      minHeight: 48,
+      borderRadius: BorderRadius.md,
+      backgroundColor: colors.primary,
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.md,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    buttonPressed: {
+      backgroundColor: colors.pressed,
+    },
+    buttonDisabled: {
+      backgroundColor: colors.disabled,
+    },
+    buttonText: {
+      fontFamily: Typography.family,
+      fontSize: Typography.body.fontSize,
+      fontWeight: "600",
+      color: colors.onPrimary,
+      lineHeight: Typography.body.lineHeight,
+      textAlign: "center",
+    },
+    buttonTextDisabled: {
+      color: colors.surfaceCard,
+    },
+  });
