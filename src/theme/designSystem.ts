@@ -33,7 +33,9 @@ export const DarkColors = {
 } as const;
 
 export type ThemeMode = "light" | "dark";
-export type ThemeColors = typeof LightColors;
+export type ThemeColors = {
+  [K in keyof typeof LightColors]: string;
+};
 
 export const getThemeColors = (mode: ThemeMode): ThemeColors =>
   mode === "dark" ? DarkColors : LightColors;

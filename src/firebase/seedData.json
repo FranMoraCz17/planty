@@ -1,0 +1,126 @@
+{
+  "collections": {
+    "users": [
+      {
+        "id": "user-1",
+        "name": "Fran Mora",
+        "username": "fran.botanica",
+        "email": "fran@planty.com",
+        "city": "Perez Zeledon, Costa Rica",
+        "avatarUrl": null,
+        "collectionCount": 18,
+        "pendingCount": 6,
+        "streakDays": 41,
+        "createdAt": "2026-03-01T09:00:00-06:00"
+      }
+    ],
+    "plants": [
+      {
+        "id": "plant-1",
+        "userId": "user-1",
+        "name": "Hortensia",
+        "scientificName": "Hydrangea macrophylla",
+        "locationName": "Patio trasero",
+        "wateringFrequencyLabel": "Cada 3 dias",
+        "createdAt": "2026-03-02T09:00:00-06:00"
+      },
+      {
+        "id": "plant-2",
+        "userId": "user-1",
+        "name": "Lirio de la paz",
+        "scientificName": "Spathiphyllum cochlearispathum",
+        "locationName": "Sala principal",
+        "wateringFrequencyLabel": "Cada 7 dias",
+        "createdAt": "2026-03-03T09:00:00-06:00"
+      },
+      {
+        "id": "plant-3",
+        "userId": "user-1",
+        "name": "Potos",
+        "scientificName": "Epipremnum aureum",
+        "locationName": "Cocina",
+        "wateringFrequencyLabel": "Cada 7 dias",
+        "createdAt": "2026-03-04T09:00:00-06:00"
+      },
+      {
+        "id": "plant-4",
+        "userId": "user-1",
+        "name": "Monstera",
+        "scientificName": "Monstera deliciosa",
+        "locationName": "Sala norte",
+        "wateringFrequencyLabel": "Cada 5 dias",
+        "createdAt": "2026-03-05T09:00:00-06:00"
+      },
+      {
+        "id": "plant-5",
+        "userId": "user-1",
+        "name": "Ficus",
+        "scientificName": "Ficus elastica",
+        "locationName": "Sala principal",
+        "wateringFrequencyLabel": "Cada 6 dias",
+        "createdAt": "2026-03-06T09:00:00-06:00"
+      }
+    ],
+    "reminders": [
+      {
+        "id": "reminder-1",
+        "userId": "user-1",
+        "plantId": "plant-3",
+        "type": "watering",
+        "title": "Riego - Potos",
+        "scheduledAt": "2026-03-25T18:00:00-06:00",
+        "priority": "alta",
+        "status": "pending",
+        "createdAt": "2026-03-24T09:00:00-06:00"
+      },
+      {
+        "id": "reminder-2",
+        "userId": "user-1",
+        "plantId": "plant-4",
+        "type": "fertilizing",
+        "title": "Fertilizar - Monstera",
+        "scheduledAt": "2026-03-26T08:00:00-06:00",
+        "priority": "media",
+        "status": "pending",
+        "createdAt": "2026-03-24T09:05:00-06:00"
+      },
+      {
+        "id": "reminder-3",
+        "userId": "user-1",
+        "plantId": "plant-5",
+        "type": "rotation",
+        "title": "Rotar maceta - Ficus",
+        "scheduledAt": "2026-03-27T16:00:00-06:00",
+        "priority": "baja",
+        "status": "pending",
+        "createdAt": "2026-03-24T09:10:00-06:00"
+      }
+    ],
+    "diagnoses": [
+      {
+        "id": "diagnosis-1",
+        "userId": "user-1",
+        "plantId": "plant-3",
+        "result": "Clorosis por riego irregular",
+        "confidence": 91,
+        "diagnosedAt": "2026-03-11T10:00:00-06:00"
+      },
+      {
+        "id": "diagnosis-2",
+        "userId": "user-1",
+        "plantId": "plant-1",
+        "result": "Posible oidio inicial",
+        "confidence": 84,
+        "diagnosedAt": "2026-03-09T10:00:00-06:00"
+      },
+      {
+        "id": "diagnosis-3",
+        "userId": "user-1",
+        "plantId": "plant-2",
+        "result": "Sin enfermedad detectada",
+        "confidence": 96,
+        "diagnosedAt": "2026-03-06T10:00:00-06:00"
+      }
+    ]
+  }
+}
