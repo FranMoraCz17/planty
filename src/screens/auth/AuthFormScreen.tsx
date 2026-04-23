@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
@@ -13,12 +13,20 @@ import {
   View,
 } from "react-native";
 import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+} from "firebase/auth";
+import FormNotice from "@/src/components/forms/FormNotice";
+import ThemedButton from "@/src/components/ui/ThemedButton";
+import { auth } from "@/src/firebase/firebaseConfig";
+import { ensureUserDocument } from "@/src/services/userService";
+import {
   BorderRadius,
   Spacing,
   Typography,
   type ThemeColors,
 } from "@/src/theme/designSystem";
-import ThemedButton from "@/src/components/ui/ThemedButton";
 import { useAppTheme } from "@/src/theme/ThemeProvider";
 
 type AuthMode = "login" | "register";
@@ -40,6 +48,12 @@ interface AuthInputProps {
   colors: ThemeColors;
   isDark: boolean;
 }
+
+type NoticeState = {
+  variant: "success" | "error" | "warning";
+  title: string;
+  message: string;
+};
 
 function AuthInput({
   label,
@@ -77,6 +91,29 @@ function AuthInput({
   );
 }
 
+const getFirebaseErrorMessage = (error: unknown, isRegister: boolean) => {
+  const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+
+  switch (code) {
+    case "auth/invalid-credential":
+    case "auth/wrong-password":
+    case "auth/user-not-found":
+      return "Credenciales invalidas. Verifica correo y contrasena.";
+    case "auth/email-already-in-use":
+      return "Ese correo ya esta registrado.";
+    case "auth/invalid-email":
+      return "El correo no tiene un formato valido.";
+    case "auth/weak-password":
+      return "La contrasena debe tener al menos 6 caracteres.";
+    case "auth/network-request-failed":
+      return "No se pudo conectar con Firebase. Revisa tu conexion.";
+    default:
+      return isRegister
+        ? "No se pudo crear la cuenta en Firebase."
+        : "No se pudo iniciar sesion en Firebase.";
+  }
+};
+
 export default function AuthFormScreen({ mode }: AuthFormScreenProps) {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
@@ -89,8 +126,20 @@ export default function AuthFormScreen({ mode }: AuthFormScreenProps) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [notice, setNotice] = useState<NoticeState | null>(null);
 
-  const stats: Array<{ icon: MaterialIconName; value: string; caption: string }> = isRegister
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        router.replace("/");
+      }
+    });
+
+    return unsubscribe;
+  }, [router]);
+
+  const stats: { icon: MaterialIconName; value: string; caption: string }[] = isRegister
     ? [
         { icon: "sprout", value: "Coleccion", caption: "Tus plantas en un solo lugar" },
         { icon: "calendar-check", value: "Rutinas", caption: "Recordatorios basicos de cuidado" },
@@ -102,11 +151,79 @@ export default function AuthFormScreen({ mode }: AuthFormScreenProps) {
 
   const title = isRegister ? "Crear cuenta" : "Bienvenido otra vez";
   const description = isRegister
-    ? "Dejamos listo el formulario base para empezar a guardar usuarios despues."
-    : "Pantalla inicial pensada para que el acceso quede separado del resto de la app.";
+    ? "Registra tu cuenta y crea tu documento de usuario real en Firebase."
+    : "Inicia sesion con tu correo y contrasena para usar tus datos reales.";
   const buttonLabel = isRegister ? "Crear cuenta" : "Iniciar sesion";
   const switchHref = isRegister ? "/(auth)/login" : "/(auth)/register";
   const switchText = isRegister ? "Ya tengo cuenta" : "Crear cuenta";
+
+  const validateForm = () => {
+    if (!email.trim() || !password.trim()) {
+      return "Correo y contrasena son obligatorios.";
+    }
+
+    if (isRegister) {
+      if (!name.trim()) {
+        return "El nombre es obligatorio para registrarse.";
+      }
+
+      if (password.length < 6) {
+        return "La contrasena debe tener al menos 6 caracteres.";
+      }
+
+      if (password !== confirmPassword) {
+        return "Las contrasenas no coinciden.";
+      }
+    }
+
+    return null;
+  };
+
+  const handleAuth = async () => {
+    const validationError = validateForm();
+
+    if (validationError) {
+      setNotice({
+        variant: "warning",
+        title: "Formulario incompleto",
+        message: validationError,
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    setNotice(null);
+
+    try {
+      if (isRegister) {
+        const credentials = await createUserWithEmailAndPassword(
+          auth,
+          email.trim(),
+          password,
+        );
+
+        await ensureUserDocument({
+          id: credentials.user.uid,
+          email: credentials.user.email,
+          name: name.trim(),
+          username: email.trim().split("@")[0],
+          city: "Sin ciudad",
+        });
+      } else {
+        await signInWithEmailAndPassword(auth, email.trim(), password);
+      }
+
+      router.replace("/");
+    } catch (error) {
+      setNotice({
+        variant: "error",
+        title: isRegister ? "Error al registrar" : "Error al iniciar sesion",
+        message: getFirebaseErrorMessage(error, isRegister),
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -154,6 +271,15 @@ export default function AuthFormScreen({ mode }: AuthFormScreenProps) {
             <Text style={styles.title}>{title}</Text>
             <Text style={styles.body}>{description}</Text>
 
+            {notice ? (
+              <FormNotice
+                title={notice.title}
+                message={notice.message}
+                variant={notice.variant}
+                onDismiss={() => setNotice(null)}
+              />
+            ) : null}
+
             {isRegister && (
               <AuthInput
                 autoCapitalize="words"
@@ -183,7 +309,7 @@ export default function AuthFormScreen({ mode }: AuthFormScreenProps) {
               isDark={isDark}
               label="Contrasena"
               onChangeText={setPassword}
-              placeholder="Minimo 8 caracteres"
+              placeholder="Minimo 6 caracteres"
               rightAction={
                 <Pressable
                   accessibilityLabel={showPassword ? "Ocultar contrasena" : "Mostrar contrasena"}
@@ -235,26 +361,14 @@ export default function AuthFormScreen({ mode }: AuthFormScreenProps) {
             )}
 
             <Text style={styles.helperText}>
-              Por ahora este flujo es visual y local. La siguiente parte natural es conectar estos
-              campos con autenticacion y una base de datos.
+              Este flujo usa Firebase Auth real y luego carga tus datos desde Firestore.
             </Text>
 
             <ThemedButton
               accessibilityLabel={buttonLabel}
-              label={buttonLabel}
-              onPress={() => router.replace("/(app)/(tabs)")}
+              label={isSubmitting ? "Procesando..." : buttonLabel}
+              onPress={handleAuth}
             />
-
-            {!isRegister && (
-              <Pressable
-                accessibilityLabel="Ir a la app en modo demo"
-                accessibilityRole="button"
-                onPress={() => router.push("/(app)/(tabs)")}
-                style={({ pressed }) => [styles.secondaryButton, pressed && styles.secondaryButtonPressed]}
-              >
-                <Text style={styles.secondaryButtonText}>Entrar en modo demo</Text>
-              </Pressable>
-            )}
 
             <View style={styles.footerRow}>
               <Text style={styles.footerText}>
@@ -425,27 +539,6 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontSize: Typography.caption.fontSize + 1,
       fontWeight: Typography.caption.fontWeight,
       lineHeight: Typography.body.lineHeight,
-    },
-    secondaryButton: {
-      minHeight: 46,
-      borderRadius: BorderRadius.md,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.surfaceCard,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingHorizontal: Spacing.lg,
-    },
-    secondaryButtonPressed: {
-      backgroundColor: isDark ? "#22332F" : "#EDF7F3",
-    },
-    secondaryButtonText: {
-      color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize,
-      fontWeight: "600",
-      lineHeight: Typography.body.lineHeight,
-      textAlign: "center",
     },
     footerRow: {
       flexDirection: "row",

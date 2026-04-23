@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import {
   Pressable,
   SafeAreaView,
@@ -8,6 +9,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { useDemoData } from "@/src/data/DemoDataProvider";
 import {
   BorderRadius,
   Spacing,
@@ -19,51 +21,48 @@ import ThemedButton from "@/src/components/ui/ThemedButton";
 
 type CollectionView = "plantas" | "sitios";
 
-const profile = {
-  nombre: "Fran Mora",
-  alias: "fran.botanica",
-  ciudad: "Perez Zeledon, Costa Rica",
-  coleccion: 18,
-  pendientes: 6,
-  racha: 41,
-} as const;
-
-const myPlants = [
-  {
-    id: "pl-1",
-    nombre: "Hortensia",
-    nombreBotanico: "Hydrangea macrophylla",
-    ubicacion: "Patio trasero",
-    riego: "Cada 3 dias",
-  },
-  {
-    id: "pl-2",
-    nombre: "Lirio de la paz",
-    nombreBotanico: "Spathiphyllum cochlearispathum",
-    ubicacion: "Sala principal",
-    riego: "Cada 7 dias",
-  },
-  {
-    id: "pl-3",
-    nombre: "Potos",
-    nombreBotanico: "Epipremnum aureum",
-    ubicacion: "Cocina",
-    riego: "Cada 7 dias",
-  },
-] as const;
-
-const mySites = [
-  { id: "st-1", nombre: "Patio trasero", luz: "Sol parcial", humedad: "Alta" },
-  { id: "st-2", nombre: "Sala principal", luz: "Luz filtrada", humedad: "Media" },
-  { id: "st-3", nombre: "Cocina", luz: "Luz indirecta", humedad: "Media" },
-] as const;
-
 export default function UserProfile() {
-  const { colors, mode, isDark, toggleTheme } = useAppTheme();
+  const router = useRouter();
+  const { colors, isDark } = useAppTheme();
+  const { currentUser, currentUserId, getPlantsByUser } = useDemoData();
   const styles = createStyles(colors, isDark);
 
-  const [showSettings, setShowSettings] = useState(false);
   const [collectionView, setCollectionView] = useState<CollectionView>("plantas");
+  const plants = getPlantsByUser(currentUserId);
+  const uniqueSites = useMemo(
+    () => Array.from(new Set(plants.map((plant) => plant.locationName))),
+    [plants],
+  );
+
+  const siteMetadata: Record<string, { luz: string; humedad: string }> = {
+    "Patio trasero": { luz: "Sol parcial", humedad: "Alta" },
+    "Sala principal": { luz: "Luz filtrada", humedad: "Media" },
+    Cocina: { luz: "Luz indirecta", humedad: "Media" },
+    "Sala norte": { luz: "Luz brillante", humedad: "Media" },
+    Dormitorio: { luz: "Luz suave", humedad: "Media" },
+  };
+
+  const mySites = uniqueSites.map((siteName, index) => ({
+    id: `site-${index}`,
+    nombre: siteName,
+    luz: siteMetadata[siteName]?.luz ?? "Luz variable",
+    humedad: siteMetadata[siteName]?.humedad ?? "Media",
+  }));
+
+  const highlightedPlant = plants[0] ?? null;
+
+  if (!currentUser) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.content}>
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateTitle}>No hay datos de perfil disponibles</Text>
+            <Text style={styles.emptyStateBody}>La capa de datos no encontro un usuario inicial.</Text>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -71,12 +70,12 @@ export default function UserProfile() {
         <View style={styles.headerTop}>
           <View>
             <Text style={styles.headerTitle}>Perfil</Text>
-            <Text style={styles.headerSubtitle}>Control de cuenta y coleccion</Text>
+            <Text style={styles.headerSubtitle}>Resumen de cuenta y coleccion</Text>
           </View>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Abrir ajustes"
-            onPress={() => setShowSettings((prev) => !prev)}
+            onPress={() => router.push("/(app)/settings")}
             style={({ pressed }) => [styles.settingsButton, pressed && styles.settingsButtonPressed]}
           >
             <MaterialCommunityIcons name="cog-outline" size={18} color={colors.onPrimary} />
@@ -84,62 +83,90 @@ export default function UserProfile() {
           </Pressable>
         </View>
 
-        {showSettings && (
-          <View style={styles.settingsPanel}>
-            <View style={styles.settingsRow}>
-              <View style={styles.settingsTextWrap}>
-                <Text style={styles.settingsTitle}>Tema visual</Text>
-                <Text style={styles.settingsBody}>Modo actual: {mode === "dark" ? "Oscuro" : "Claro"}</Text>
-              </View>
-              <ThemedButton
-                label={mode === "dark" ? "Pasar a claro" : "Pasar a oscuro"}
-                accessibilityLabel="Cambiar tema de la aplicacion"
-                onPress={toggleTheme}
-                style={styles.settingsAction}
-              />
+        <View style={styles.heroCard}>
+          <View style={styles.heroTop}>
+            <View style={styles.avatarWrap}>
+              <MaterialCommunityIcons name="account-outline" size={30} color={colors.onPrimary} />
             </View>
-            <View style={styles.settingsDivider} />
-            <View style={styles.quickSettingsRow}>
-              <View style={styles.quickChip}>
-                <MaterialCommunityIcons name="bell-outline" size={16} color={colors.textSecondary} />
-                <Text style={styles.quickChipText}>Notificaciones activas</Text>
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName}>{currentUser.name}</Text>
+              <Text style={styles.profileAlias}>@{currentUser.username}</Text>
+              <View style={styles.infoRow}>
+                <MaterialCommunityIcons name="email-outline" size={14} color={colors.textSecondary} />
+                <Text style={styles.infoText}>{currentUser.email}</Text>
               </View>
-              <View style={styles.quickChip}>
-                <MaterialCommunityIcons name="shield-check-outline" size={16} color={colors.textSecondary} />
-                <Text style={styles.quickChipText}>Privacidad estandar</Text>
+              <View style={styles.infoRow}>
+                <MaterialCommunityIcons name="map-marker-outline" size={14} color={colors.textSecondary} />
+                <Text style={styles.infoText}>{currentUser.city}</Text>
               </View>
             </View>
           </View>
-        )}
-
-        <View style={styles.profileCard}>
-          <View style={styles.avatarWrap}>
-            <MaterialCommunityIcons name="account-off-outline" size={28} color={colors.onPrimary} />
-            <Text style={styles.avatarHint}>Sin foto</Text>
-          </View>
-          <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{profile.nombre}</Text>
-            <Text style={styles.profileAlias}>@{profile.alias}</Text>
-            <View style={styles.locationRow}>
-              <MaterialCommunityIcons name="map-marker" size={14} color={colors.textSecondary} />
-              <Text style={styles.locationText}>{profile.ciudad}</Text>
-            </View>
+          <View style={styles.quickActionsRow}>
+            <ThemedButton
+              accessibilityLabel="Editar perfil"
+              label="Editar perfil"
+              onPress={() => router.push("/(app)/forms/user")}
+              style={styles.primaryAction}
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Agregar planta"
+              onPress={() => router.push("/(app)/forms/plant?mode=create")}
+              style={({ pressed }) => [
+                styles.secondaryAction,
+                pressed && styles.secondaryActionPressed,
+              ]}
+            >
+              <MaterialCommunityIcons name="plus" size={18} color={colors.primary} />
+              <Text style={styles.secondaryActionText}>Agregar planta</Text>
+            </Pressable>
           </View>
         </View>
 
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>{profile.coleccion}</Text>
+            <Text style={styles.statValue}>{plants.length}</Text>
             <Text style={styles.statLabel}>Plantas</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>{profile.pendientes}</Text>
-            <Text style={styles.statLabel}>Pendientes</Text>
+            <Text style={styles.statValue}>{mySites.length}</Text>
+            <Text style={styles.statLabel}>Sitios</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>{profile.racha}</Text>
-            <Text style={styles.statLabel}>Racha</Text>
+            <Text style={styles.statValue}>{currentUser.pendingCount}</Text>
+            <Text style={styles.statLabel}>Pendientes</Text>
           </View>
+        </View>
+
+        <View style={styles.highlightCard}>
+          <Text style={styles.cardTitle}>Estado actual</Text>
+          {highlightedPlant ? (
+            <>
+              <Text style={styles.highlightTitle}>{highlightedPlant.name}</Text>
+              <Text style={styles.highlightBody}>
+                Ubicada en {highlightedPlant.locationName} con riego {highlightedPlant.wateringFrequencyLabel.toLowerCase()}.
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Editar ${highlightedPlant.name}`}
+                onPress={() => router.push(`/(app)/forms/plant?id=${highlightedPlant.id}`)}
+                style={({ pressed }) => [
+                  styles.inlineAction,
+                  pressed && styles.inlineActionPressed,
+                ]}
+              >
+                <MaterialCommunityIcons name="pencil-outline" size={16} color={colors.primary} />
+                <Text style={styles.inlineActionText}>Editar planta destacada</Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <Text style={styles.highlightTitle}>Coleccion lista para completar</Text>
+              <Text style={styles.highlightBody}>
+                Agrega una planta nueva para mostrar historial y ubicaciones dentro del perfil.
+              </Text>
+            </>
+          )}
         </View>
 
         <View style={styles.segmentWrap}>
@@ -167,21 +194,27 @@ export default function UserProfile() {
 
         {collectionView === "plantas" ? (
           <View style={styles.listWrap}>
-            {myPlants.map((plant) => (
+            {plants.map((plant) => (
               <View key={plant.id} style={styles.itemCard}>
                 <View style={styles.itemIcon}>
                   <MaterialCommunityIcons name="leaf" size={18} color={colors.onPrimary} />
                 </View>
                 <View style={styles.itemContent}>
-                  <Text style={styles.itemTitle}>{plant.nombre}</Text>
-                  <Text style={styles.itemSubtitle}>{plant.nombreBotanico}</Text>
+                  <Text style={styles.itemTitle}>{plant.name}</Text>
+                  <Text style={styles.itemSubtitle}>{plant.scientificName}</Text>
                   <View style={styles.metaRow}>
-                    <Text style={styles.metaText}>{plant.ubicacion}</Text>
-                    <Text style={styles.metaDot}>-</Text>
-                    <Text style={styles.metaText}>{plant.riego}</Text>
+                    <Text style={styles.metaChip}>{plant.locationName}</Text>
+                    <Text style={styles.metaChip}>{plant.wateringFrequencyLabel}</Text>
                   </View>
                 </View>
-                <MaterialCommunityIcons name="dots-horizontal" size={18} color={colors.textSecondary} />
+                <Pressable
+                  accessibilityLabel={`Editar ${plant.name}`}
+                  accessibilityRole="button"
+                  onPress={() => router.push(`/(app)/forms/plant?id=${plant.id}`)}
+                  style={({ pressed }) => [styles.inlineEditButton, pressed && styles.inlineEditButtonPressed]}
+                >
+                  <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.textSecondary} />
+                </Pressable>
               </View>
             ))}
           </View>
@@ -257,7 +290,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontWeight: "700",
       lineHeight: Typography.caption.lineHeight,
     },
-    settingsPanel: {
+    emptyState: {
       backgroundColor: colors.surfaceCard,
       borderRadius: BorderRadius.lg,
       borderWidth: 1,
@@ -265,67 +298,26 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       padding: Spacing.md,
       gap: Spacing.sm,
     },
-    settingsRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: Spacing.md,
-    },
-    settingsTextWrap: {
-      flex: 1,
-      gap: 2,
-    },
-    settingsTitle: {
+    emptyStateTitle: {
       color: colors.text,
       fontFamily: Typography.family,
       fontSize: Typography.body.fontSize,
       fontWeight: "700",
       lineHeight: Typography.body.lineHeight,
     },
-    settingsBody: {
+    emptyStateBody: {
       color: colors.textSecondary,
       fontFamily: Typography.family,
       fontSize: Typography.caption.fontSize + 1,
       fontWeight: Typography.caption.fontWeight,
       lineHeight: Typography.caption.lineHeight,
     },
-    settingsAction: {
-      minWidth: 132,
-      paddingHorizontal: Spacing.sm,
-    },
-    settingsDivider: {
-      height: 1,
-      backgroundColor: colors.border,
-      marginVertical: 2,
-    },
-    quickSettingsRow: {
-      flexDirection: "row",
-      gap: Spacing.sm,
-      flexWrap: "wrap",
-    },
-    quickChip: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      borderRadius: BorderRadius.full,
-      backgroundColor: isDark ? "#233730" : "#E8F4EF",
-      paddingHorizontal: Spacing.sm,
-      paddingVertical: Spacing.xs,
-    },
-    quickChipText: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
-      fontWeight: "600",
-      lineHeight: Typography.caption.lineHeight,
-    },
-    profileCard: {
+    heroCard: {
       backgroundColor: colors.surfaceCard,
       borderRadius: BorderRadius.lg,
       borderWidth: 1,
       borderColor: colors.border,
-      padding: Spacing.md,
-      flexDirection: "row",
-      alignItems: "center",
+      padding: Spacing.lg,
       gap: Spacing.md,
       shadowColor: "#000000",
       shadowOffset: { width: 0, height: 2 },
@@ -333,53 +325,79 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       shadowRadius: 8,
       elevation: 2,
     },
+    heroTop: {
+      flexDirection: "row",
+      gap: Spacing.md,
+      alignItems: "center",
+    },
     avatarWrap: {
-      width: 78,
-      height: 78,
-      borderRadius: 39,
+      width: 82,
+      height: 82,
+      borderRadius: 41,
       backgroundColor: colors.primary,
       alignItems: "center",
       justifyContent: "center",
-      gap: 2,
-    },
-    avatarHint: {
-      color: colors.onPrimary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize,
-      fontWeight: "700",
-      lineHeight: Typography.caption.lineHeight,
-      opacity: 0.92,
     },
     profileInfo: {
       flex: 1,
-      gap: 2,
+      gap: 3,
     },
     profileName: {
       color: colors.text,
       fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize + 2,
+      fontSize: Typography.body.fontSize + 4,
       fontWeight: "700",
-      lineHeight: Typography.body.lineHeight,
+      lineHeight: Typography.body.lineHeight + 2,
     },
     profileAlias: {
       color: colors.primary,
       fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
+      fontSize: Typography.caption.fontSize + 2,
       fontWeight: "700",
       lineHeight: Typography.caption.lineHeight,
     },
-    locationRow: {
+    infoRow: {
       flexDirection: "row",
       alignItems: "center",
       gap: 4,
-      marginTop: 3,
+      marginTop: 2,
     },
-    locationText: {
+    infoText: {
       color: colors.textSecondary,
       fontFamily: Typography.family,
       fontSize: Typography.caption.fontSize + 1,
-      fontWeight: Typography.caption.fontWeight,
+      fontWeight: "600",
       lineHeight: Typography.caption.lineHeight,
+    },
+    quickActionsRow: {
+      flexDirection: "row",
+      gap: Spacing.sm,
+    },
+    primaryAction: {
+      flex: 1,
+    },
+    secondaryAction: {
+      flex: 1,
+      minHeight: 48,
+      borderRadius: BorderRadius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: isDark ? "#1D2F2A" : "#EDF8F4",
+      alignItems: "center",
+      justifyContent: "center",
+      flexDirection: "row",
+      gap: 8,
+      paddingHorizontal: Spacing.md,
+    },
+    secondaryActionPressed: {
+      opacity: 0.85,
+    },
+    secondaryActionText: {
+      color: colors.primary,
+      fontFamily: Typography.family,
+      fontSize: Typography.body.fontSize - 1,
+      fontWeight: "700",
+      lineHeight: Typography.body.lineHeight,
     },
     statsRow: {
       flexDirection: "row",
@@ -407,6 +425,57 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontFamily: Typography.family,
       fontSize: Typography.caption.fontSize + 1,
       fontWeight: "600",
+      lineHeight: Typography.caption.lineHeight,
+    },
+    highlightCard: {
+      backgroundColor: colors.surfaceCard,
+      borderRadius: BorderRadius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: Spacing.lg,
+      gap: Spacing.sm,
+    },
+    cardTitle: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: Typography.caption.fontSize + 1,
+      fontWeight: "700",
+      lineHeight: Typography.caption.lineHeight,
+      textTransform: "uppercase",
+    },
+    highlightTitle: {
+      color: colors.text,
+      fontFamily: Typography.family,
+      fontSize: Typography.body.fontSize + 3,
+      fontWeight: "700",
+      lineHeight: Typography.body.lineHeight + 2,
+    },
+    highlightBody: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: Typography.body.fontSize - 1,
+      fontWeight: Typography.body.fontWeight,
+      lineHeight: Typography.body.lineHeight,
+    },
+    inlineAction: {
+      marginTop: Spacing.xs,
+      alignSelf: "flex-start",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: Spacing.xs,
+      borderRadius: BorderRadius.full,
+      backgroundColor: isDark ? "#20352F" : "#E5F3EE",
+    },
+    inlineActionPressed: {
+      opacity: 0.85,
+    },
+    inlineActionText: {
+      color: colors.primary,
+      fontFamily: Typography.family,
+      fontSize: Typography.caption.fontSize + 1,
+      fontWeight: "700",
       lineHeight: Typography.caption.lineHeight,
     },
     segmentWrap: {
@@ -481,9 +550,21 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     metaRow: {
       flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
+      flexWrap: "wrap",
+      gap: Spacing.xs,
       marginTop: 2,
+    },
+    metaChip: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: Typography.caption.fontSize + 1,
+      fontWeight: "600",
+      lineHeight: Typography.caption.lineHeight,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: Spacing.xs,
+      borderRadius: BorderRadius.full,
+      backgroundColor: isDark ? "#20352F" : "#E5F3EE",
+      overflow: "hidden",
     },
     metaText: {
       color: colors.textSecondary,
@@ -492,11 +573,14 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontWeight: "600",
       lineHeight: Typography.caption.lineHeight,
     },
-    metaDot: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize,
-      fontWeight: "700",
-      lineHeight: Typography.caption.lineHeight,
+    inlineEditButton: {
+      width: 34,
+      height: 34,
+      borderRadius: BorderRadius.full,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    inlineEditButtonPressed: {
+      backgroundColor: isDark ? "#223630" : "#E8F4EF",
     },
   });

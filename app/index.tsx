@@ -1,5 +1,12 @@
 import { Redirect } from "expo-router";
+import { useDemoData } from "@/src/data/DemoDataProvider";
 
 export default function Index() {
-  return <Redirect href="/(auth)/login" />;
+  const { isReady, isAuthenticated } = useDemoData();
+
+  if (!isReady) {
+    return null;
+  }
+
+  return <Redirect href={isAuthenticated ? "/(app)/(tabs)" : "/(auth)/login"} />;
 }
