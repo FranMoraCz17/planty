@@ -46,10 +46,7 @@ const CameraService = {
   },
 
   async readAsBase64(uri: string): Promise<string> {
-    const base64 = await FileSystem.readAsStringAsync(uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    return base64;
+    return FileSystem.readAsStringAsync(uri, { encoding: "base64" });
   },
 
   toggleFacing(current: CameraType): CameraType {
