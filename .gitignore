@@ -46,9 +46,9 @@ Thumbs.db
 *.swp
 *.swo
 
-# Documentos de configuración de sistemaa
-.claude
-docs/
+# Configuración de Claude (herramienta de desarrollo, no va al repo)
+.claude/
+memory/
 
 # ============================================================
 # IDEs

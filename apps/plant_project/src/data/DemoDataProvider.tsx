@@ -18,7 +18,7 @@ export type EditableUserFields = Pick<UserDocument, "name" | "username" | "email
 export type EditablePlantFields = Pick<
   PlantDocument,
   "name" | "scientificName" | "locationName" | "wateringFrequencyLabel"
->;
+> & { photoUri?: string };
 
 interface UpdateOptions {
   simulateFailure?: boolean;

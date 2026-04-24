@@ -21,13 +21,14 @@ export interface PlantDocument {
   locationName: string;
   wateringFrequencyLabel: string;
   createdAt: string;
+  photoUri?: string;
 }
 
 export type CreatePlantInput = PlantDocument;
 export type UpdatePlantInput = Pick<
   PlantDocument,
   "name" | "scientificName" | "locationName" | "wateringFrequencyLabel"
->;
+> & { photoUri?: string };
 
 interface FirestorePlantDocument {
   id?: string;
@@ -40,6 +41,7 @@ interface FirestorePlantDocument {
   wateringFrequencyLabel?: string;
   createdAt?: string;
   updatedAt?: string;
+  photoUri?: string;
 }
 
 const mapPlantDocument = (id: string, raw: FirestorePlantDocument): PlantDocument => ({
@@ -50,6 +52,7 @@ const mapPlantDocument = (id: string, raw: FirestorePlantDocument): PlantDocumen
   locationName: raw.locationName?.trim() || raw.location?.trim() || "Ubicacion sin definir",
   wateringFrequencyLabel: raw.wateringFrequencyLabel?.trim() || "Cada 7 dias",
   createdAt: raw.createdAt ?? new Date().toISOString(),
+  photoUri: raw.photoUri,
 });
 
 export async function getPlantsByUser(
@@ -98,6 +101,7 @@ export async function createPlant(data: CreatePlantInput): Promise<string> {
       locationName: data.locationName,
       wateringFrequencyLabel: data.wateringFrequencyLabel,
       createdAt: data.createdAt || new Date().toISOString(),
+      ...(data.photoUri ? { photoUri: data.photoUri } : {}),
     });
 
     return plantRef.id;

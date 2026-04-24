@@ -28,6 +28,22 @@
     "plugins": [
       "expo-router",
       [
+        "expo-camera",
+        {
+          "cameraPermission": "Planty necesita acceso a tu cámara para identificar plantas.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Planty necesita acceso a tus fotos para guardar imágenes de plantas.",
+          "savePhotosPermission": "Planty necesita permiso para guardar fotos de tus plantas.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",

@@ -122,3 +122,17 @@ class ApiCollectionResponse(BaseModel):
     collection: str
     count: int
     items: list[dict]
+
+
+class PlantIdentifyRequest(BaseModel):
+    image_base64: str
+    mime_type: str = "image/jpeg"
+
+
+class PlantIdentifyResponse(BaseModel):
+    common_name: str
+    scientific_name: str
+    confidence: str
+    care_tips: list[str]
+    description: str
+    is_plant: bool

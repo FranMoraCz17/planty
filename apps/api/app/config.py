@@ -28,6 +28,8 @@ class Settings:
             service_account_path = (BASE_DIR / service_account_path).resolve()
         self.firebase_service_account_path = service_account_path
 
+        self.gemini_api_key = os.getenv("GEMINI_API_KEY", "")
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
