@@ -1,51 +1,58 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+# ============================================================
+# SECRETOS — NUNCA COMMITEAR
+# ============================================================
+serviceAccountKey.json
+*.json.key
+google-services.json
+GoogleService-Info.plist
 
-# dependencies
+# ============================================================
+# ENTORNOS
+# ============================================================
+.env
+.env.local
+.env.*.local
+
+# ============================================================
+# PYTHON (apps/api)
+# ============================================================
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ============================================================
+# NODE / EXPO (apps/mobile)
+# ============================================================
 node_modules/
-
-# Expo
 .expo/
 dist/
 web-build/
-expo-env.d.ts
+*.jsbundle
 
-# Native
-.kotlin/
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
-
-# Metro
-.metro-health-check*
-
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
-
-# macOS
+# ============================================================
+# SISTEMA OPERATIVO
+# ============================================================
 .DS_Store
-*.pem
+Thumbs.db
+*.swp
+*.swo
 
-# local env files
-.env*.local
-
-# typescript
-*.tsbuildinfo
-
-app-example
-
-# generated native folders
-/ios
-/android
-
-# local coursework docs
+# Documentos de configuración de sistemaa
+.claude
 docs/
-docs/img
-docs/actividad1-investigacion.md
-ENTREGA_ASIGNACION_02.pdf
-ENTREGA_ASIGNACION_02.md
-CONTEXTO_MAESTRO.md
+
+# ============================================================
+# IDEs
+# ============================================================
+.vscode/settings.json
+.idea/
+*.iml
