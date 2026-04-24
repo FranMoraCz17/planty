@@ -50,7 +50,7 @@ def identify_plant(body: PlantIdentifyRequest) -> dict:
 
     url = (
         "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"gemini-2.0-flash:generateContent?key={settings.gemini_api_key}"
+        f"gemini-2.5-flash:generateContent?key={settings.gemini_api_key}"
     )
 
     payload = json.dumps({
@@ -81,13 +81,13 @@ def identify_plant(body: PlantIdentifyRequest) -> dict:
     )
 
     try:
-        with urllib.request.urlopen(req, timeout=20) as response:
+        with urllib.request.urlopen(req, timeout=30) as response:
             raw = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         if exc.code == 429:
             raise HTTPException(
                 status_code=429,
-                detail="Limite de solicitudes de IA alcanzado. Espera unos segundos e intenta de nuevo.",
+                detail="Limite de solicitudes de IA alcanzado. Intenta de nuevo en unos minutos.",
             ) from exc
         raise HTTPException(status_code=502, detail=f"Error al contactar Gemini: {exc}") from exc
     except Exception as exc:
