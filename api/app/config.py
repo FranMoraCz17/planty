@@ -21,7 +21,7 @@ class Settings:
 
         configured_service_account = os.getenv(
             "FIREBASE_SERVICE_ACCOUNT_PATH",
-            "./../serviceAccountKey.json",
+            "../serviceAccountKey.json",
         )
         service_account_path = Path(configured_service_account)
         if not service_account_path.is_absolute():
