@@ -1,6 +1,6 @@
 import { CameraView, CameraType, FlashMode } from "expo-camera";
 import * as MediaLibrary from "expo-media-library";
-import * as FileSystem from "expo-file-system";
+import { readAsStringAsync } from "expo-file-system/legacy";
 import { RefObject } from "react";
 
 export interface PhotoResult {
@@ -46,7 +46,7 @@ const CameraService = {
   },
 
   async readAsBase64(uri: string): Promise<string> {
-    return FileSystem.readAsStringAsync(uri, { encoding: "base64" });
+    return readAsStringAsync(uri, { encoding: "base64" });
   },
 
   toggleFacing(current: CameraType): CameraType {

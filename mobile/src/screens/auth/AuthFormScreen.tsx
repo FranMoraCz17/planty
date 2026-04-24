@@ -212,8 +212,7 @@ export default function AuthFormScreen({ mode }: AuthFormScreenProps) {
       } else {
         await signInWithEmailAndPassword(auth, email.trim(), password);
       }
-
-      router.replace("/");
+      // la navegación la maneja onAuthStateChanged — no navegar aquí
     } catch (error) {
       setNotice({
         variant: "error",

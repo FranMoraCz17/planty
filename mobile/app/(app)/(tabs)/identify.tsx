@@ -221,12 +221,13 @@ export default function IdentifyTab() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <CameraView
-        ref={cameraRef}
-        style={styles.camera}
-        facing={facing}
-        flash={flashMode}
-      >
+      <View style={styles.cameraWrapper}>
+        <CameraView
+          ref={cameraRef}
+          style={styles.camera}
+          facing={facing}
+          flash={flashMode}
+        />
         <View style={styles.cameraTopBar}>
           <Pressable
             accessibilityRole="button"
@@ -257,7 +258,7 @@ export default function IdentifyTab() {
             <View style={styles.shutterInner} />
           </Pressable>
         </View>
-      </CameraView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -333,11 +334,18 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontSize: Typography.body.fontSize - 1,
       fontWeight: "600",
     },
+    cameraWrapper: {
+      flex: 1,
+      position: "relative",
+    },
     camera: {
       flex: 1,
-      justifyContent: "space-between",
     },
     cameraTopBar: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
       flexDirection: "row",
       justifyContent: "flex-end",
       gap: Spacing.sm,
@@ -353,6 +361,10 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       justifyContent: "center",
     },
     cameraBottomBar: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
       alignItems: "center",
       gap: Spacing.lg,
       paddingBottom: Spacing.xxl,
