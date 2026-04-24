@@ -25,6 +25,9 @@ const IdentifyService = {
     });
 
     if (!response.ok) {
+      if (response.status === 429) {
+        throw new Error("Demasiadas solicitudes. Espera unos segundos e intenta de nuevo.");
+      }
       const errorBody = await response.text();
       throw new Error(`Error del servidor (${response.status}): ${errorBody}`);
     }

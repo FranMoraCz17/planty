@@ -14,11 +14,11 @@ import {
 } from "react-native";
 import {
   createUserWithEmailAndPassword,
-  onAuthStateChanged,
   signInWithEmailAndPassword,
 } from "firebase/auth";
 import FormNotice from "@/src/components/forms/FormNotice";
 import ThemedButton from "@/src/components/ui/ThemedButton";
+import { useDemoData } from "@/src/data/DemoDataProvider";
 import { auth } from "@/src/firebase/firebaseConfig";
 import { ensureUserDocument } from "@/src/services/userService";
 import {
@@ -129,15 +129,13 @@ export default function AuthFormScreen({ mode }: AuthFormScreenProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notice, setNotice] = useState<NoticeState | null>(null);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        router.replace("/");
-      }
-    });
+  const { isAuthenticated } = useDemoData();
 
-    return unsubscribe;
-  }, [router]);
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace("/(app)/(tabs)");
+    }
+  }, [isAuthenticated, router]);
 
   const stats: { icon: MaterialIconName; value: string; caption: string }[] = isRegister
     ? [

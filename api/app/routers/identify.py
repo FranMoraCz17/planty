@@ -1,5 +1,6 @@
 import json
 import re
+import urllib.error
 import urllib.request
 
 from fastapi import APIRouter, HTTPException
@@ -82,6 +83,13 @@ def identify_plant(body: PlantIdentifyRequest) -> dict:
     try:
         with urllib.request.urlopen(req, timeout=20) as response:
             raw = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        if exc.code == 429:
+            raise HTTPException(
+                status_code=429,
+                detail="Limite de solicitudes de IA alcanzado. Espera unos segundos e intenta de nuevo.",
+            ) from exc
+        raise HTTPException(status_code=502, detail=f"Error al contactar Gemini: {exc}") from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Error al contactar Gemini: {exc}") from exc
 
