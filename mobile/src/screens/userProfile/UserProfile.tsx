@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { signOut } from "firebase/auth";
+import { auth } from "@/src/firebase/firebaseConfig";
 import {
   Pressable,
   SafeAreaView,
@@ -59,6 +61,11 @@ export default function UserProfile() {
             <Text style={styles.emptyStateTitle}>No hay datos de perfil disponibles</Text>
             <Text style={styles.emptyStateBody}>La capa de datos no encontro un usuario inicial.</Text>
           </View>
+          <ThemedButton
+            label="Cerrar sesion"
+            accessibilityLabel="Cerrar sesion"
+            onPress={() => void signOut(auth)}
+          />
         </View>
       </SafeAreaView>
     );

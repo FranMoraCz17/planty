@@ -49,7 +49,7 @@ def identify_plant(body: PlantIdentifyRequest) -> dict:
 
     url = (
         "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"gemini-1.5-flash:generateContent?key={settings.gemini_api_key}"
+        f"gemini-2.0-flash:generateContent?key={settings.gemini_api_key}"
     )
 
     payload = json.dumps({

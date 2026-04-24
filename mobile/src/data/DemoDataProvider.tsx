@@ -9,6 +9,7 @@ import {
   updatePlantById,
 } from "@/src/services/plantService";
 import {
+  ensureUserDocument,
   getUserById,
   type UserDocument,
   updateUserById,
@@ -116,7 +117,18 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        const userDocument = await getUserById(firebaseUser.uid);
+        let userDocument = await getUserById(firebaseUser.uid);
+
+        if (!userDocument) {
+          userDocument = await ensureUserDocument({
+            id: firebaseUser.uid,
+            email: firebaseUser.email,
+            name: firebaseUser.displayName ?? firebaseUser.email?.split("@")[0] ?? "Usuario",
+            username: firebaseUser.email?.split("@")[0] ?? firebaseUser.uid.slice(0, 8),
+            city: "Sin ciudad",
+          });
+        }
+
         let userPlants = await getPlantsByUserFromFirestore(firebaseUser.uid);
 
         if (userPlants.length === 0) {
