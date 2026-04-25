@@ -566,6 +566,14 @@ function FullScreenLoader({
   );
 }
 
+const LOADER_MESSAGES = [
+  { title: "Procesando imagen", subtitle: "Optimizando la fotografía antes de enviarla al modelo." },
+  { title: "Conectando con Gemini", subtitle: "Despertando el servidor y abriendo conexión con la IA." },
+  { title: "Analizando hojas y forma", subtitle: "El modelo está extrayendo características visuales." },
+  { title: "Buscando coincidencias", subtitle: "Comparando con miles de especies en el catálogo botánico." },
+  { title: "Generando recomendaciones", subtitle: "Preparando consejos de cuidado personalizados para ti." },
+];
+
 function IdentifyingLoader({
   photoUri,
   colors,
@@ -578,6 +586,7 @@ function IdentifyingLoader({
   const s = createStyles(colors, isDark);
   const scanY = useSharedValue(0);
   const dotOpacity = useSharedValue(0.3);
+  const [messageIndex, setMessageIndex] = useState(0);
 
   useEffect(() => {
     scanY.value = withRepeat(
@@ -595,6 +604,13 @@ function IdentifyingLoader({
     );
   }, [scanY, dotOpacity]);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setMessageIndex((i) => (i + 1) % LOADER_MESSAGES.length);
+    }, 3500);
+    return () => clearInterval(interval);
+  }, []);
+
   const scanStyle = useAnimatedStyle(() => ({
     top: `${scanY.value * 95}%`,
   }));
@@ -602,6 +618,8 @@ function IdentifyingLoader({
   const dotStyle = useAnimatedStyle(() => ({
     opacity: dotOpacity.value,
   }));
+
+  const message = LOADER_MESSAGES[messageIndex];
 
   return (
     <SafeAreaView style={s.container}>
@@ -621,11 +639,8 @@ function IdentifyingLoader({
             <Animated.View style={[s.identifyingDot, dotStyle, { backgroundColor: colors.primary }]} />
             <Text style={s.identifyingStatusText}>Analizando con IA</Text>
           </View>
-          <Text style={s.identifyingTitle}>Reconociendo tu planta</Text>
-          <Text style={s.identifyingSubtitle}>
-            Estamos consultando el modelo Gemini para identificar la especie y generar
-            recomendaciones de cuidado.
-          </Text>
+          <Text style={s.identifyingTitle}>{message.title}</Text>
+          <Text style={s.identifyingSubtitle}>{message.subtitle}</Text>
         </View>
       </View>
     </SafeAreaView>

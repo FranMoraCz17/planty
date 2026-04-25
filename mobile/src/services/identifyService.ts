@@ -50,18 +50,58 @@ interface IdentifyApiResponse {
   fun_fact: string | null;
 }
 
+const REQUEST_TIMEOUT_MS = 75_000;
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function wakeBackend(): Promise<void> {
+  try {
+    await fetchWithTimeout(`${API_BASE_URL}/health`, { method: "GET" }, 70_000);
+  } catch {
+    // ignoramos: si el health falla, el request real lo manejará
+  }
+}
+
 const IdentifyService = {
   async identifyFromUri(photoUri: string): Promise<PlantIdentifyResult> {
     const base64 = await CameraService.readAsBase64(photoUri);
 
-    const response = await fetch(`${API_BASE_URL}/api/identify-plant`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        image_base64: base64,
-        mime_type: "image/jpeg",
-      }),
-    });
+    let response: Response;
+    try {
+      response = await fetchWithTimeout(
+        `${API_BASE_URL}/api/identify-plant`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image_base64: base64, mime_type: "image/jpeg" }),
+        },
+        REQUEST_TIMEOUT_MS,
+      );
+    } catch (err) {
+      // si fue abort por timeout, intentamos despertar el backend y reintentar una vez
+      if (err instanceof Error && err.name === "AbortError") {
+        await wakeBackend();
+        response = await fetchWithTimeout(
+          `${API_BASE_URL}/api/identify-plant`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ image_base64: base64, mime_type: "image/jpeg" }),
+          },
+          REQUEST_TIMEOUT_MS,
+        );
+      } else {
+        throw new Error("No se pudo contactar el servidor. Revisa tu conexión e intenta de nuevo.");
+      }
+    }
 
     if (!response.ok) {
       if (response.status === 429) {
