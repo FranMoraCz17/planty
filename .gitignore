@@ -46,9 +46,13 @@ Thumbs.db
 *.swp
 *.swo
 
-# Documentos de configuración de sistemaa
-.claude
+# Configuración de Claude (herramienta de desarrollo, no va al repo)
+.claude/
+memory/
+
+# Documentos del curso (no van al repo)
 docs/
+CLAUDE.md
 
 # ============================================================
 # IDEs
@@ -56,3 +60,4 @@ docs/
 .vscode/settings.json
 .idea/
 *.iml
+CLAUDE.md
