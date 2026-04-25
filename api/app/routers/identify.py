@@ -132,10 +132,14 @@ def identify_plant(body: PlantIdentifyRequest) -> dict:
 
     try:
         text = raw["candidates"][0]["content"]["parts"][0]["text"]
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        if not match:
-            raise ValueError("Sin JSON en la respuesta de Gemini.")
-        result: dict = json.loads(match.group())
+        cleaned = text.strip()
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+        cleaned = re.sub(r"\s*```\s*$", "", cleaned)
+        first = cleaned.find("{")
+        last = cleaned.rfind("}")
+        if first == -1 or last == -1 or last <= first:
+            raise ValueError(f"Sin JSON en la respuesta. Texto recibido: {text[:200]}")
+        result: dict = json.loads(cleaned[first : last + 1])
     except Exception as exc:
         raise HTTPException(
             status_code=502,
