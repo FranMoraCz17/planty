@@ -59,12 +59,13 @@ export default function TabsLayout() {
               style={[
                 styles.cameraButton,
                 {
-                  backgroundColor: focused ? colors.pressed : colors.accentWarm,
+                  backgroundColor: focused ? colors.pressed : colors.primary,
                   borderColor: colors.surfaceCard,
+                  shadowColor: colors.primary,
                 },
               ]}
             >
-              <MaterialCommunityIcons name="camera" size={28} color={colors.onPrimary} />
+              <MaterialCommunityIcons name="leaf-circle" size={28} color={colors.onPrimary} />
             </View>
           ),
         }}
@@ -84,10 +85,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 24,
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 12,
+    elevation: 10,
   },
 });

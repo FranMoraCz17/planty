@@ -1,35 +1,35 @@
 export const LightColors = {
-  primary: "#16A34A",
-  secondary: "#84C64A",
-  surface: "#ECF8F3",
-  text: "#12342E",
-  error: "#E25D50",
-  disabled: "#9DB7AF",
-  pressed: "#12917A",
+  primary: "#10B981",
+  secondary: "#34D399",
+  surface: "#FAFAFA",
+  text: "#0A0A0A",
+  error: "#EF4444",
+  disabled: "#A1A1AA",
+  pressed: "#059669",
   onPrimary: "#FFFFFF",
-  textSecondary: "#4F6F68",
-  surfaceCard: "#F9FFFC",
-  border: "#CFE5DD",
-  accentWarm: "#F6A623",
-  accentCool: "#7FC8D6",
-  accentLavender: "#B9B6E8",
+  textSecondary: "#52525B",
+  surfaceCard: "#FFFFFF",
+  border: "#E4E4E7",
+  accentWarm: "#F59E0B",
+  accentCool: "#06B6D4",
+  accentLavender: "#8B5CF6",
 } as const;
 
 export const DarkColors = {
-  primary: "#16A34A",
-  secondary: "#7EBF46",
-  surface: "#0F1C19",
-  text: "#E5F3EE",
-  error: "#EA756A",
-  disabled: "#567068",
-  pressed: "#15856E",
-  onPrimary: "#FFFFFF",
-  textSecondary: "#A4BBB3",
-  surfaceCard: "#172825",
-  border: "#2A3D37",
-  accentWarm: "#E4A640",
-  accentCool: "#64AEBB",
-  accentLavender: "#8D88C2",
+  primary: "#A3E635",
+  secondary: "#84CC16",
+  surface: "#0A0A0A",
+  text: "#FAFAFA",
+  error: "#F87171",
+  disabled: "#52525B",
+  pressed: "#65A30D",
+  onPrimary: "#0A0A0A",
+  textSecondary: "#A1A1AA",
+  surfaceCard: "#161616",
+  border: "#27272A",
+  accentWarm: "#FBBF24",
+  accentCool: "#22D3EE",
+  accentLavender: "#A78BFA",
 } as const;
 
 export type ThemeMode = "light" | "dark";
@@ -44,10 +44,20 @@ export const Colors = LightColors;
 
 export const Typography = {
   family: "System",
+  display: {
+    fontSize: 34,
+    fontWeight: "800" as const,
+    lineHeight: 40,
+  },
   title: {
     fontSize: 26,
     fontWeight: "700" as const,
     lineHeight: 32,
+  },
+  subtitle: {
+    fontSize: 20,
+    fontWeight: "700" as const,
+    lineHeight: 26,
   },
   body: {
     fontSize: 16,
@@ -68,12 +78,14 @@ export const Spacing = {
   lg: 16,
   xl: 24,
   xxl: 32,
+  xxxl: 48,
 } as const;
 
 export const BorderRadius = {
   sm: 6,
   md: 12,
   lg: 20,
+  xl: 28,
   full: 999,
 } as const;
 

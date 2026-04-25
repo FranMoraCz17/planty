@@ -17,7 +17,6 @@ import {
   signInWithEmailAndPassword,
 } from "firebase/auth";
 import FormNotice from "@/src/components/forms/FormNotice";
-import ThemedButton from "@/src/components/ui/ThemedButton";
 import { useDemoData } from "@/src/data/DemoDataProvider";
 import { auth } from "@/src/firebase/firebaseConfig";
 import { ensureUserDocument } from "@/src/services/userService";
@@ -30,7 +29,6 @@ import {
 import { useAppTheme } from "@/src/theme/ThemeProvider";
 
 type AuthMode = "login" | "register";
-type MaterialIconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
 interface AuthFormScreenProps {
   mode: AuthMode;
@@ -67,17 +65,20 @@ function AuthInput({
   colors,
   isDark,
 }: AuthInputProps) {
+  const [focused, setFocused] = useState(false);
   const styles = createStyles(colors, isDark);
 
   return (
     <View style={styles.inputGroup}>
       <Text style={styles.inputLabel}>{label}</Text>
-      <View style={styles.inputWrap}>
+      <View style={[styles.inputWrap, focused && styles.inputWrapFocused]}>
         <TextInput
           accessibilityLabel={label}
           autoCapitalize={autoCapitalize}
           keyboardType={keyboardType}
           onChangeText={onChangeText}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           placeholder={placeholder}
           placeholderTextColor={colors.disabled}
           secureTextEntry={secureTextEntry}
@@ -98,19 +99,19 @@ const getFirebaseErrorMessage = (error: unknown, isRegister: boolean) => {
     case "auth/invalid-credential":
     case "auth/wrong-password":
     case "auth/user-not-found":
-      return "Credenciales invalidas. Verifica correo y contrasena.";
+      return "Credenciales inválidas. Verifica correo y contraseña.";
     case "auth/email-already-in-use":
-      return "Ese correo ya esta registrado.";
+      return "Ese correo ya está registrado.";
     case "auth/invalid-email":
-      return "El correo no tiene un formato valido.";
+      return "El correo no tiene un formato válido.";
     case "auth/weak-password":
-      return "La contrasena debe tener al menos 6 caracteres.";
+      return "La contraseña debe tener al menos 6 caracteres.";
     case "auth/network-request-failed":
-      return "No se pudo conectar con Firebase. Revisa tu conexion.";
+      return "No se pudo conectar con Firebase. Revisa tu conexión.";
     default:
       return isRegister
         ? "No se pudo crear la cuenta en Firebase."
-        : "No se pudo iniciar sesion en Firebase.";
+        : "No se pudo iniciar sesión en Firebase.";
   }
 };
 
@@ -137,43 +138,24 @@ export default function AuthFormScreen({ mode }: AuthFormScreenProps) {
     }
   }, [isAuthenticated, router]);
 
-  const stats: { icon: MaterialIconName; value: string; caption: string }[] = isRegister
-    ? [
-        { icon: "sprout", value: "Coleccion", caption: "Tus plantas en un solo lugar" },
-        { icon: "calendar-check", value: "Rutinas", caption: "Recordatorios basicos de cuidado" },
-      ]
-    : [
-        { icon: "leaf", value: "Seguimiento", caption: "Riego, luz y diagnostico" },
-        { icon: "camera", value: "Registro", caption: "Fotos e historial por planta" },
-      ];
-
-  const title = isRegister ? "Crear cuenta" : "Bienvenido otra vez";
+  const title = isRegister ? "Crea tu cuenta" : "Hola de nuevo";
   const description = isRegister
-    ? "Registra tu cuenta y crea tu documento de usuario real en Firebase."
-    : "Inicia sesion con tu correo y contrasena para usar tus datos reales.";
-  const buttonLabel = isRegister ? "Crear cuenta" : "Iniciar sesion";
+    ? "Regístrate para empezar a identificar y cuidar tus plantas con IA."
+    : "Ingresa con tu correo para acceder a tu colección.";
+  const buttonLabel = isRegister ? "Crear cuenta" : "Iniciar sesión";
   const switchHref = isRegister ? "/(auth)/login" : "/(auth)/register";
-  const switchText = isRegister ? "Ya tengo cuenta" : "Crear cuenta";
+  const switchPrompt = isRegister ? "¿Ya tienes cuenta?" : "¿Aún no tienes cuenta?";
+  const switchText = isRegister ? "Inicia sesión" : "Regístrate";
 
   const validateForm = () => {
     if (!email.trim() || !password.trim()) {
-      return "Correo y contrasena son obligatorios.";
+      return "Correo y contraseña son obligatorios.";
     }
-
     if (isRegister) {
-      if (!name.trim()) {
-        return "El nombre es obligatorio para registrarse.";
-      }
-
-      if (password.length < 6) {
-        return "La contrasena debe tener al menos 6 caracteres.";
-      }
-
-      if (password !== confirmPassword) {
-        return "Las contrasenas no coinciden.";
-      }
+      if (!name.trim()) return "El nombre es obligatorio.";
+      if (password.length < 6) return "La contraseña debe tener al menos 6 caracteres.";
+      if (password !== confirmPassword) return "Las contraseñas no coinciden.";
     }
-
     return null;
   };
 
@@ -181,11 +163,7 @@ export default function AuthFormScreen({ mode }: AuthFormScreenProps) {
     const validationError = validateForm();
 
     if (validationError) {
-      setNotice({
-        variant: "warning",
-        title: "Formulario incompleto",
-        message: validationError,
-      });
+      setNotice({ variant: "warning", title: "Formulario incompleto", message: validationError });
       return;
     }
 
@@ -194,12 +172,7 @@ export default function AuthFormScreen({ mode }: AuthFormScreenProps) {
 
     try {
       if (isRegister) {
-        const credentials = await createUserWithEmailAndPassword(
-          auth,
-          email.trim(),
-          password,
-        );
-
+        const credentials = await createUserWithEmailAndPassword(auth, email.trim(), password);
         await ensureUserDocument({
           id: credentials.user.uid,
           email: credentials.user.email,
@@ -210,11 +183,10 @@ export default function AuthFormScreen({ mode }: AuthFormScreenProps) {
       } else {
         await signInWithEmailAndPassword(auth, email.trim(), password);
       }
-      // la navegación la maneja onAuthStateChanged — no navegar aquí
     } catch (error) {
       setNotice({
         variant: "error",
-        title: isRegister ? "Error al registrar" : "Error al iniciar sesion",
+        title: isRegister ? "Error al registrar" : "Error al iniciar sesión",
         message: getFirebaseErrorMessage(error, isRegister),
       });
     } finally {
@@ -233,49 +205,32 @@ export default function AuthFormScreen({ mode }: AuthFormScreenProps) {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.heroCard}>
-            <View style={styles.heroBadge}>
-              <MaterialCommunityIcons name="pine-tree" size={18} color={colors.onPrimary} />
-              <Text style={styles.heroBadgeText}>Planty</Text>
+          <View style={styles.brandRow}>
+            <View style={styles.brandLogo}>
+              <View style={styles.brandLogoInner}>
+                <MaterialCommunityIcons name="leaf" size={18} color={colors.onPrimary} />
+              </View>
             </View>
-
-            <Text style={styles.heroTitle}>
-              {isRegister ? "Organiza tu cuidado desde el primer dia" : "Tu jardin en un solo panel"}
-            </Text>
-            <Text style={styles.heroBody}>
-              La idea es entrar rapido, ver lo importante y despues seguir a cuidado, perfil o
-              coleccion sin perderse.
-            </Text>
-
-            <View style={styles.statsRow}>
-              {stats.map((item) => (
-                <View key={item.value} style={styles.statCard}>
-                  <View style={styles.statIcon}>
-                    <MaterialCommunityIcons
-                      color={isDark ? colors.onPrimary : colors.primary}
-                      name={item.icon}
-                      size={18}
-                    />
-                  </View>
-                  <Text style={styles.statValue}>{item.value}</Text>
-                  <Text style={styles.statCaption}>{item.caption}</Text>
-                </View>
-              ))}
+            <Text style={styles.brandText}>planty</Text>
+            <View style={styles.brandBadge}>
+              <Text style={styles.brandBadgeText}>v1</Text>
             </View>
           </View>
 
-          <View style={styles.formCard}>
-            <Text style={styles.title}>{title}</Text>
-            <Text style={styles.body}>{description}</Text>
+          <View style={styles.heroBlock}>
+            <Text style={styles.heroTitle}>{title}</Text>
+            <Text style={styles.heroBody}>{description}</Text>
+          </View>
 
-            {notice ? (
+          <View style={styles.formCard}>
+            {notice && (
               <FormNotice
                 title={notice.title}
                 message={notice.message}
                 variant={notice.variant}
                 onDismiss={() => setNotice(null)}
               />
-            ) : null}
+            )}
 
             {isRegister && (
               <AuthInput
@@ -284,7 +239,7 @@ export default function AuthFormScreen({ mode }: AuthFormScreenProps) {
                 isDark={isDark}
                 label="Nombre"
                 onChangeText={setName}
-                placeholder="Francisco Mora"
+                placeholder="Tu nombre"
                 value={name}
               />
             )}
@@ -296,7 +251,7 @@ export default function AuthFormScreen({ mode }: AuthFormScreenProps) {
               keyboardType="email-address"
               label="Correo"
               onChangeText={setEmail}
-              placeholder="fran@planty.com"
+              placeholder="tu@correo.com"
               value={email}
             />
 
@@ -304,20 +259,20 @@ export default function AuthFormScreen({ mode }: AuthFormScreenProps) {
               autoCapitalize="none"
               colors={colors}
               isDark={isDark}
-              label="Contrasena"
+              label="Contraseña"
               onChangeText={setPassword}
-              placeholder="Minimo 6 caracteres"
+              placeholder="Mínimo 6 caracteres"
               rightAction={
                 <Pressable
-                  accessibilityLabel={showPassword ? "Ocultar contrasena" : "Mostrar contrasena"}
+                  accessibilityLabel={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                   accessibilityRole="button"
-                  onPress={() => setShowPassword((previous) => !previous)}
+                  onPress={() => setShowPassword((p) => !p)}
                   style={({ pressed }) => [styles.inputIconButton, pressed && styles.inputIconPressed]}
                 >
                   <MaterialCommunityIcons
                     color={colors.textSecondary}
                     name={showPassword ? "eye-off-outline" : "eye-outline"}
-                    size={20}
+                    size={18}
                   />
                 </Pressable>
               }
@@ -330,25 +285,20 @@ export default function AuthFormScreen({ mode }: AuthFormScreenProps) {
                 autoCapitalize="none"
                 colors={colors}
                 isDark={isDark}
-                label="Confirmar contrasena"
+                label="Confirmar contraseña"
                 onChangeText={setConfirmPassword}
-                placeholder="Repite la contrasena"
+                placeholder="Repite la contraseña"
                 rightAction={
                   <Pressable
-                    accessibilityLabel={
-                      showConfirmPassword ? "Ocultar confirmacion" : "Mostrar confirmacion"
-                    }
+                    accessibilityLabel={showConfirmPassword ? "Ocultar" : "Mostrar"}
                     accessibilityRole="button"
-                    onPress={() => setShowConfirmPassword((previous) => !previous)}
-                    style={({ pressed }) => [
-                      styles.inputIconButton,
-                      pressed && styles.inputIconPressed,
-                    ]}
+                    onPress={() => setShowConfirmPassword((p) => !p)}
+                    style={({ pressed }) => [styles.inputIconButton, pressed && styles.inputIconPressed]}
                   >
                     <MaterialCommunityIcons
                       color={colors.textSecondary}
                       name={showConfirmPassword ? "eye-off-outline" : "eye-outline"}
-                      size={20}
+                      size={18}
                     />
                   </Pressable>
                 }
@@ -357,24 +307,38 @@ export default function AuthFormScreen({ mode }: AuthFormScreenProps) {
               />
             )}
 
-            <Text style={styles.helperText}>
-              Este flujo usa Firebase Auth real y luego carga tus datos desde Firestore.
-            </Text>
-
-            <ThemedButton
-              accessibilityLabel={buttonLabel}
-              label={isSubmitting ? "Procesando..." : buttonLabel}
+            <Pressable
               onPress={handleAuth}
-            />
+              disabled={isSubmitting}
+              style={({ pressed }) => [
+                styles.submitBtn,
+                pressed && styles.submitBtnPressed,
+                isSubmitting && styles.submitBtnDisabled,
+              ]}
+            >
+              <Text style={styles.submitBtnText}>
+                {isSubmitting ? "Procesando..." : buttonLabel}
+              </Text>
+              <MaterialCommunityIcons name="arrow-right" size={16} color={colors.onPrimary} />
+            </Pressable>
+
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>seguro con Firebase Auth</Text>
+              <View style={styles.dividerLine} />
+            </View>
 
             <View style={styles.footerRow}>
-              <Text style={styles.footerText}>
-                {isRegister ? "Si ya habias entrado antes:" : "Si todavia no tienes cuenta:"}
-              </Text>
+              <Text style={styles.footerText}>{switchPrompt}</Text>
               <Link href={switchHref} style={styles.link}>
                 {switchText}
               </Link>
             </View>
+          </View>
+
+          <View style={styles.bottomMeta}>
+            <View style={styles.metaDot} />
+            <Text style={styles.metaText}>Identificación con Gemini · Datos en Firestore</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -392,82 +356,72 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       flex: 1,
     },
     content: {
-      padding: Spacing.lg,
-      gap: Spacing.md,
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.xl,
       paddingBottom: Spacing.xxl,
+      gap: Spacing.xl,
     },
-    heroCard: {
-      backgroundColor: isDark ? "#18302A" : "#DDF2E8",
-      borderRadius: BorderRadius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: Spacing.lg,
-      gap: Spacing.md,
-    },
-    heroBadge: {
-      alignSelf: "flex-start",
+    brandRow: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 6,
-      backgroundColor: colors.primary,
-      borderRadius: BorderRadius.full,
-      paddingHorizontal: Spacing.sm,
-      paddingVertical: 6,
+      gap: Spacing.sm,
     },
-    heroBadgeText: {
-      color: colors.onPrimary,
+    brandLogo: {
+      width: 32,
+      height: 32,
+      borderRadius: 9,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    brandLogoInner: {
+      width: 28,
+      height: 28,
+      borderRadius: 8,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    brandText: {
+      color: colors.text,
       fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
+      fontSize: 22,
+      fontWeight: "800",
+      letterSpacing: -0.8,
+    },
+    brandBadge: {
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 4,
+      backgroundColor: isDark ? "#1F1F1F" : "#F4F4F5",
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    brandBadgeText: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: 9,
       fontWeight: "700",
-      lineHeight: Typography.caption.lineHeight,
+      letterSpacing: 0.5,
+      textTransform: "uppercase",
+    },
+    heroBlock: {
+      gap: Spacing.sm,
+      marginTop: Spacing.lg,
     },
     heroTitle: {
       color: colors.text,
       fontFamily: Typography.family,
-      fontSize: Typography.title.fontSize,
-      fontWeight: Typography.title.fontWeight,
-      lineHeight: Typography.title.lineHeight,
+      fontSize: 34,
+      fontWeight: "800",
+      letterSpacing: -1,
+      lineHeight: 38,
     },
     heroBody: {
       color: colors.textSecondary,
       fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize,
-      fontWeight: Typography.body.fontWeight,
-      lineHeight: Typography.body.lineHeight,
-    },
-    statsRow: {
-      gap: Spacing.sm,
-    },
-    statCard: {
-      backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.md,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: Spacing.md,
-      gap: Spacing.xs,
-    },
-    statIcon: {
-      width: 34,
-      height: 34,
-      borderRadius: BorderRadius.full,
-      backgroundColor: isDark ? "#294039" : "#EDF8F3",
-      alignItems: "center",
-      justifyContent: "center",
-      marginBottom: 2,
-    },
-    statValue: {
-      color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize,
-      fontWeight: "700",
-      lineHeight: Typography.body.lineHeight,
-    },
-    statCaption: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
-      fontWeight: Typography.caption.fontWeight,
-      lineHeight: Typography.body.lineHeight,
+      fontSize: 15,
+      lineHeight: 22,
     },
     formCard: {
       backgroundColor: colors.surfaceCard,
@@ -477,85 +431,125 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       padding: Spacing.lg,
       gap: Spacing.md,
     },
-    title: {
-      color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: Typography.title.fontSize - 2,
-      fontWeight: Typography.title.fontWeight,
-      lineHeight: Typography.title.lineHeight,
-    },
-    body: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize,
-      fontWeight: Typography.body.fontWeight,
-      lineHeight: Typography.body.lineHeight,
-    },
     inputGroup: {
       gap: 6,
     },
     inputLabel: {
-      color: colors.text,
+      color: colors.textSecondary,
       fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
+      fontSize: 11,
       fontWeight: "700",
-      lineHeight: Typography.caption.lineHeight,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
     },
     inputWrap: {
-      minHeight: 52,
+      minHeight: 48,
       borderRadius: BorderRadius.md,
       borderWidth: 1,
       borderColor: colors.border,
-      backgroundColor: isDark ? "#13231F" : "#F5FBF8",
+      backgroundColor: isDark ? "#0F0F0F" : "#FAFAFA",
       paddingLeft: Spacing.md,
       flexDirection: "row",
       alignItems: "center",
+    },
+    inputWrapFocused: {
+      borderColor: colors.primary,
     },
     input: {
       flex: 1,
       color: colors.text,
       fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize,
+      fontSize: 15,
       fontWeight: "500",
       paddingVertical: Spacing.sm,
     },
     inputIconButton: {
-      minWidth: 44,
-      minHeight: 44,
+      width: 44,
+      height: 44,
       alignItems: "center",
       justifyContent: "center",
       marginRight: 2,
       borderRadius: BorderRadius.full,
     },
     inputIconPressed: {
-      backgroundColor: isDark ? "#223630" : "#E6F2ED",
+      backgroundColor: isDark ? "#1F1F1F" : "#F4F4F5",
     },
-    helperText: {
+    submitBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      backgroundColor: colors.primary,
+      borderRadius: BorderRadius.md,
+      paddingVertical: 14,
+      marginTop: Spacing.xs,
+    },
+    submitBtnPressed: {
+      opacity: 0.85,
+    },
+    submitBtnDisabled: {
+      opacity: 0.5,
+    },
+    submitBtnText: {
+      color: colors.onPrimary,
+      fontFamily: Typography.family,
+      fontSize: 15,
+      fontWeight: "800",
+      letterSpacing: -0.2,
+    },
+    divider: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      marginTop: 2,
+    },
+    dividerLine: {
+      flex: 1,
+      height: 1,
+      backgroundColor: colors.border,
+    },
+    dividerText: {
       color: colors.textSecondary,
       fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
-      fontWeight: Typography.caption.fontWeight,
-      lineHeight: Typography.body.lineHeight,
+      fontSize: 10,
+      fontWeight: "600",
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
     },
     footerRow: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
       gap: 6,
-      flexWrap: "wrap",
     },
     footerText: {
       color: colors.textSecondary,
       fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
-      fontWeight: Typography.caption.fontWeight,
-      lineHeight: Typography.caption.lineHeight,
+      fontSize: 13,
     },
     link: {
       color: colors.primary,
       fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
+      fontSize: 13,
       fontWeight: "700",
-      lineHeight: Typography.caption.lineHeight,
+    },
+    bottomMeta: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      marginTop: Spacing.sm,
+    },
+    metaDot: {
+      width: 5,
+      height: 5,
+      borderRadius: 2.5,
+      backgroundColor: colors.primary,
+    },
+    metaText: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: 11,
+      fontWeight: "500",
     },
   });
