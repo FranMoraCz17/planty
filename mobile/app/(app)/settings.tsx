@@ -2,7 +2,14 @@ import React, { useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { signOut } from "firebase/auth";
-import { Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import {
+  Linking,
+  Pressable,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import ThemedButton from "@/src/components/ui/ThemedButton";
 import { auth } from "@/src/firebase/firebaseConfig";
 import {
@@ -19,6 +26,10 @@ export default function SettingsScreen() {
   const styles = createStyles(colors, isDark);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
+
+  const handleOpenSystemSettings = () => {
+    void Linking.openSettings();
+  };
 
   const handleSignOut = async () => {
     try {
@@ -61,6 +72,26 @@ export default function SettingsScreen() {
             label={mode === "dark" ? "Pasar a claro" : "Pasar a oscuro"}
             onPress={toggleTheme}
           />
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Permisos</Text>
+          <Text style={styles.cardBody}>
+            Gestiona permisos del dispositivo como camara y galeria desde la configuracion del sistema.
+          </Text>
+          <Pressable
+            accessibilityLabel="Abrir configuracion del sistema"
+            accessibilityRole="button"
+            onPress={handleOpenSystemSettings}
+            style={({ pressed }) => [styles.settingsButton, pressed && styles.settingsButtonPressed]}
+          >
+            <MaterialCommunityIcons
+              name="cog-outline"
+              size={18}
+              color={colors.text}
+            />
+            <Text style={styles.settingsButtonText}>Abrir configuracion del sistema</Text>
+          </Pressable>
         </View>
 
         <View style={styles.card}>
@@ -165,6 +196,28 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       flexDirection: "row",
       gap: 8,
       paddingHorizontal: Spacing.md,
+    },
+    settingsButton: {
+      minHeight: 48,
+      borderRadius: BorderRadius.md,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: "center",
+      justifyContent: "center",
+      flexDirection: "row",
+      gap: 8,
+      paddingHorizontal: Spacing.md,
+    },
+    settingsButtonPressed: {
+      opacity: 0.75,
+    },
+    settingsButtonText: {
+      color: colors.text,
+      fontFamily: Typography.family,
+      fontSize: Typography.body.fontSize,
+      fontWeight: "700",
+      lineHeight: Typography.body.lineHeight,
     },
     signOutButtonPressed: {
       backgroundColor: colors.pressed,
