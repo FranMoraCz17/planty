@@ -2,7 +2,16 @@ import React, { useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { signOut } from "firebase/auth";
-import { Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import {
+  Linking,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from "react-native";
 import ThemedButton from "@/src/components/ui/ThemedButton";
 import { auth } from "@/src/firebase/firebaseConfig";
 import {
@@ -13,12 +22,27 @@ import {
 } from "@/src/theme/designSystem";
 import { useAppTheme } from "@/src/theme/ThemeProvider";
 
+type SettingsVisualOptions = {
+  largeText: boolean;
+  highContrast: boolean;
+};
+
 export default function SettingsScreen() {
   const router = useRouter();
   const { colors, isDark, mode, toggleTheme } = useAppTheme();
-  const styles = createStyles(colors, isDark);
+
+  const [largeText, setLargeText] = useState(false);
+  const [highContrast, setHighContrast] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const [hapticsEnabled, setHapticsEnabled] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
+
+  const styles = createStyles(colors, isDark, { largeText, highContrast });
+
+  const handleOpenSystemSettings = () => {
+    void Linking.openSettings();
+  };
 
   const handleSignOut = async () => {
     try {
@@ -37,25 +61,33 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
           <Pressable
-            accessibilityLabel="Volver al perfil"
+            accessibilityLabel="Volver a la pantalla anterior"
             accessibilityRole="button"
             onPress={() => router.back()}
-            style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
+            style={({ pressed }) => [
+              styles.backButton,
+              pressed && styles.backButtonPressed,
+            ]}
           >
             <MaterialCommunityIcons name="arrow-left" size={18} color={colors.text} />
           </Pressable>
           <View style={styles.headerCopy}>
             <Text style={styles.title}>Ajustes</Text>
-            <Text style={styles.subtitle}>Tema y sesion</Text>
+            <Text style={styles.subtitle}>Configuracion basica y accesibilidad</Text>
           </View>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Tema visual</Text>
-          <Text style={styles.cardBody}>Modo actual: {mode === "dark" ? "Oscuro" : "Claro"}</Text>
+          <Text style={styles.cardTitle}>Apariencia</Text>
+          <Text style={styles.cardBody}>
+            Modo actual: {mode === "dark" ? "Oscuro" : "Claro"}
+          </Text>
           <ThemedButton
             accessibilityLabel="Alternar tema de la aplicacion"
             label={mode === "dark" ? "Pasar a claro" : "Pasar a oscuro"}
@@ -64,7 +96,103 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Sesion</Text>
+          <Text style={styles.cardTitle}>Accesibilidad</Text>
+          <Text style={styles.cardBody}>
+            Opciones rapidas para lectura y comodidad visual.
+          </Text>
+
+          <View style={styles.settingRow}>
+            <View style={styles.settingCopy}>
+              <Text style={styles.settingLabel}>Texto grande</Text>
+              <Text style={styles.settingHint}>
+                Aumenta el tamano del texto en esta pantalla.
+              </Text>
+            </View>
+            <Switch
+              accessibilityLabel="Activar texto grande"
+              accessibilityRole="switch"
+              onValueChange={setLargeText}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={largeText ? colors.onPrimary : "#FFFFFF"}
+              value={largeText}
+            />
+          </View>
+
+          <View style={styles.settingRow}>
+            <View style={styles.settingCopy}>
+              <Text style={styles.settingLabel}>Alto contraste</Text>
+              <Text style={styles.settingHint}>
+                Refuerza bordes y contraste para mejorar legibilidad.
+              </Text>
+            </View>
+            <Switch
+              accessibilityLabel="Activar alto contraste"
+              accessibilityRole="switch"
+              onValueChange={setHighContrast}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={highContrast ? colors.onPrimary : "#FFFFFF"}
+              value={highContrast}
+            />
+          </View>
+
+          <View style={styles.settingRow}>
+            <View style={styles.settingCopy}>
+              <Text style={styles.settingLabel}>Reducir animaciones</Text>
+              <Text style={styles.settingHint}>
+                Minimiza transiciones para evitar fatiga visual.
+              </Text>
+            </View>
+            <Switch
+              accessibilityLabel="Reducir animaciones"
+              accessibilityRole="switch"
+              onValueChange={setReduceMotion}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={reduceMotion ? colors.onPrimary : "#FFFFFF"}
+              value={reduceMotion}
+            />
+          </View>
+
+          <View style={styles.settingRowLast}>
+            <View style={styles.settingCopy}>
+              <Text style={styles.settingLabel}>Vibracion tactil</Text>
+              <Text style={styles.settingHint}>
+                Mantiene respuesta tactil en acciones principales.
+              </Text>
+            </View>
+            <Switch
+              accessibilityLabel="Activar vibracion tactil"
+              accessibilityRole="switch"
+              onValueChange={setHapticsEnabled}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={hapticsEnabled ? colors.onPrimary : "#FFFFFF"}
+              value={hapticsEnabled}
+            />
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Permisos</Text>
+          <Text style={styles.cardBody}>
+            Gestiona permisos del dispositivo como camara y galeria.
+          </Text>
+          <Pressable
+            accessibilityLabel="Abrir configuracion del sistema"
+            accessibilityRole="button"
+            onPress={handleOpenSystemSettings}
+            style={({ pressed }) => [
+              styles.primaryActionButton,
+              pressed && styles.primaryActionButtonPressed,
+            ]}
+          >
+            <MaterialCommunityIcons name="cog-outline" size={18} color={colors.onPrimary} />
+            <Text style={styles.primaryActionButtonText}>
+              Abrir configuracion del sistema
+            </Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Cuenta</Text>
           <Text style={styles.cardBody}>Cierra la sesion actual y vuelve al login.</Text>
           <Pressable
             accessibilityLabel="Cerrar sesion"
@@ -72,24 +200,28 @@ export default function SettingsScreen() {
             disabled={isSigningOut}
             onPress={handleSignOut}
             style={({ pressed }) => [
-              styles.signOutButton,
-              pressed && styles.signOutButtonPressed,
-              isSigningOut && styles.signOutButtonDisabled,
+              styles.dangerActionButton,
+              pressed && styles.dangerActionButtonPressed,
+              isSigningOut && styles.actionButtonDisabled,
             ]}
           >
-            <MaterialCommunityIcons name="logout" size={18} color={colors.onPrimary} />
-            <Text style={styles.signOutButtonText}>
+            <MaterialCommunityIcons name="logout" size={18} color="#FFFFFF" />
+            <Text style={styles.dangerActionButtonText}>
               {isSigningOut ? "Cerrando sesion..." : "Cerrar sesion"}
             </Text>
           </Pressable>
           {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-const createStyles = (colors: ThemeColors, isDark: boolean) =>
+const createStyles = (
+  colors: ThemeColors,
+  isDark: boolean,
+  options: SettingsVisualOptions,
+) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -98,6 +230,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     content: {
       padding: Spacing.lg,
       gap: Spacing.md,
+      paddingBottom: Spacing.xxl,
     },
     header: {
       flexDirection: "row",
@@ -119,18 +252,23 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     headerCopy: {
       gap: 2,
+      flex: 1,
     },
     title: {
       color: colors.text,
       fontFamily: Typography.family,
-      fontSize: Typography.title.fontSize - 4,
+      fontSize: options.largeText
+        ? Typography.title.fontSize - 1
+        : Typography.title.fontSize - 4,
       fontWeight: Typography.title.fontWeight,
       lineHeight: Typography.title.lineHeight,
     },
     subtitle: {
       color: colors.textSecondary,
       fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
+      fontSize: options.largeText
+        ? Typography.caption.fontSize + 3
+        : Typography.caption.fontSize + 1,
       fontWeight: "600",
       lineHeight: Typography.caption.lineHeight,
     },
@@ -138,25 +276,65 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       backgroundColor: colors.surfaceCard,
       borderRadius: BorderRadius.lg,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: options.highContrast ? colors.text : colors.border,
       padding: Spacing.md,
       gap: Spacing.sm,
     },
     cardTitle: {
       color: colors.text,
       fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize,
+      fontSize: options.largeText
+        ? Typography.body.fontSize + 2
+        : Typography.body.fontSize,
       fontWeight: "700",
       lineHeight: Typography.body.lineHeight,
     },
     cardBody: {
       color: colors.textSecondary,
       fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
+      fontSize: options.largeText
+        ? Typography.caption.fontSize + 3
+        : Typography.caption.fontSize + 1,
       fontWeight: Typography.caption.fontWeight,
       lineHeight: Typography.caption.lineHeight,
     },
-    signOutButton: {
+    settingRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: Spacing.sm,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      paddingVertical: Spacing.sm,
+    },
+    settingRowLast: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: Spacing.sm,
+      paddingVertical: Spacing.sm,
+    },
+    settingCopy: {
+      flex: 1,
+      gap: 2,
+    },
+    settingLabel: {
+      color: colors.text,
+      fontFamily: Typography.family,
+      fontSize: options.largeText
+        ? Typography.body.fontSize + 1
+        : Typography.body.fontSize,
+      fontWeight: "700",
+    },
+    settingHint: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: options.largeText
+        ? Typography.caption.fontSize + 2
+        : Typography.caption.fontSize,
+      lineHeight: Typography.caption.lineHeight,
+    },
+    primaryActionButton: {
       minHeight: 48,
       borderRadius: BorderRadius.md,
       backgroundColor: colors.primary,
@@ -166,23 +344,49 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       gap: 8,
       paddingHorizontal: Spacing.md,
     },
-    signOutButtonPressed: {
+    primaryActionButtonPressed: {
       backgroundColor: colors.pressed,
     },
-    signOutButtonDisabled: {
-      opacity: 0.7,
-    },
-    signOutButtonText: {
+    primaryActionButtonText: {
       color: colors.onPrimary,
       fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize,
+      fontSize: options.largeText
+        ? Typography.body.fontSize + 1
+        : Typography.body.fontSize,
+      fontWeight: "700",
+      lineHeight: Typography.body.lineHeight,
+    },
+    dangerActionButton: {
+      minHeight: 48,
+      borderRadius: BorderRadius.md,
+      backgroundColor: colors.error,
+      alignItems: "center",
+      justifyContent: "center",
+      flexDirection: "row",
+      gap: 8,
+      paddingHorizontal: Spacing.md,
+    },
+    dangerActionButtonPressed: {
+      opacity: 0.85,
+    },
+    actionButtonDisabled: {
+      opacity: 0.65,
+    },
+    dangerActionButtonText: {
+      color: "#FFFFFF",
+      fontFamily: Typography.family,
+      fontSize: options.largeText
+        ? Typography.body.fontSize + 1
+        : Typography.body.fontSize,
       fontWeight: "700",
       lineHeight: Typography.body.lineHeight,
     },
     errorText: {
       color: colors.error,
       fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
+      fontSize: options.largeText
+        ? Typography.caption.fontSize + 3
+        : Typography.caption.fontSize + 1,
       fontWeight: "600",
       lineHeight: Typography.caption.lineHeight,
     },

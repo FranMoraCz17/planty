@@ -22,8 +22,15 @@ import Animated, {
 } from "react-native-reanimated";
 import { useDemoData } from "@/src/data/DemoDataProvider";
 import { useCamera } from "@/src/hooks/useCamera";
-import IdentifyService, { PlantIdentifyResult } from "@/src/services/identifyService";
-import { BorderRadius, Spacing, Typography, type ThemeColors } from "@/src/theme/designSystem";
+import IdentifyService, {
+  PlantIdentifyResult,
+} from "@/src/services/identifyService";
+import {
+  BorderRadius,
+  Spacing,
+  Typography,
+  type ThemeColors,
+} from "@/src/theme/designSystem";
 import { useAppTheme } from "@/src/theme/ThemeProvider";
 
 type ScreenState = "camera" | "identifying" | "result";
@@ -53,7 +60,11 @@ export default function IdentifyTab() {
   const [isSaving, setIsSaving] = useState(false);
 
   const flashIcon: IconName =
-    flashMode === "on" ? "flash" : flashMode === "auto" ? "flash-auto" : "flash-off";
+    flashMode === "on"
+      ? "flash"
+      : flashMode === "auto"
+        ? "flash-auto"
+        : "flash-off";
 
   const handleTakePhoto = async () => {
     const photo = await takePhoto({ quality: 0.8, base64: false });
@@ -67,7 +78,10 @@ export default function IdentifyTab() {
       setResult(identifyResult);
       setScreenState("result");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Error al identificar la planta.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Error al identificar la planta.";
       Alert.alert("Error de identificación", message);
       setScreenState("camera");
     }
@@ -88,13 +102,21 @@ export default function IdentifyTab() {
       Alert.alert(
         "Planta guardada",
         `${result.commonName} se agregó a tu colección.`,
-        [{ text: "Ver mis plantas", onPress: () => router.push("/(app)/(tabs)/my-plants") }],
+        [
+          {
+            text: "Ver mis plantas",
+            onPress: () => router.push("/(app)/(tabs)/my-plants"),
+          },
+        ],
       );
       setScreenState("camera");
       setResult(null);
       setLastPhotoUri(null);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "No se pudo guardar la planta.";
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No se pudo guardar la planta.";
       Alert.alert("Error", message);
     } finally {
       setIsSaving(false);
@@ -112,7 +134,13 @@ export default function IdentifyTab() {
   };
 
   if (isLoadingPermissions) {
-    return <FullScreenLoader text="Verificando permisos" colors={colors} isDark={isDark} />;
+    return (
+      <FullScreenLoader
+        text="Verificando permisos"
+        colors={colors}
+        isDark={isDark}
+      />
+    );
   }
 
   if (!isPermissionGranted) {
@@ -121,21 +149,31 @@ export default function IdentifyTab() {
         <ScrollView contentContainerStyle={[styles.content, styles.centered]}>
           <View style={styles.permissionCard}>
             <View style={styles.permissionIconWrap}>
-              <MaterialCommunityIcons name="camera-off" size={32} color={colors.textSecondary} />
+              <MaterialCommunityIcons
+                name="camera-off"
+                size={32}
+                color={colors.textSecondary}
+              />
             </View>
             <Text style={styles.permissionTitle}>Cámara sin acceso</Text>
             <Text style={styles.permissionBody}>
-              Planty necesita acceso a tu cámara para identificar plantas. Sin este permiso la
-              identificación no estará disponible, pero puedes seguir usando el resto de la app.
+              Planty necesita acceso a tu cámara para identificar plantas. Sin
+              este permiso la identificación no estará disponible, pero puedes
+              seguir usando el resto de la app.
             </Text>
             <Pressable
               onPress={() => void requestPermissions()}
-              style={({ pressed }) => [styles.primaryBtn, pressed && styles.primaryBtnPressed]}
+              style={({ pressed }) => [
+                styles.primaryBtn,
+                pressed && styles.primaryBtnPressed,
+              ]}
             >
               <Text style={styles.primaryBtnText}>Solicitar permisos</Text>
             </Pressable>
             <Pressable onPress={handleOpenSettings} style={styles.settingsLink}>
-              <Text style={styles.settingsLinkText}>Abrir configuración del sistema</Text>
+              <Text style={styles.settingsLinkText}>
+                Abrir configuración del sistema
+              </Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -144,13 +182,22 @@ export default function IdentifyTab() {
   }
 
   if (screenState === "identifying") {
-    return <IdentifyingLoader photoUri={lastPhotoUri} colors={colors} isDark={isDark} />;
+    return (
+      <IdentifyingLoader
+        photoUri={lastPhotoUri}
+        colors={colors}
+        isDark={isDark}
+      />
+    );
   }
 
   if (screenState === "result" && result) {
     return (
       <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={styles.resultContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.resultContent}
+          showsVerticalScrollIndicator={false}
+        >
           {lastPhotoUri && (
             <View style={styles.heroPhotoWrap}>
               <Image source={{ uri: lastPhotoUri }} style={styles.heroPhoto} />
@@ -165,16 +212,30 @@ export default function IdentifyTab() {
           <View style={styles.actionsRow}>
             <Pressable
               onPress={handleRetry}
-              style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
+              style={({ pressed }) => [
+                styles.actionBtn,
+                pressed && styles.actionBtnPressed,
+              ]}
             >
-              <MaterialCommunityIcons name="camera-retake-outline" size={16} color={colors.text} />
-              <Text style={styles.actionBtnText}>Tomar otra</Text>
+              <MaterialCommunityIcons
+                name="camera-retake-outline"
+                size={16}
+                color={colors.text}
+              />
+              <Text style={styles.actionBtnText}>Abrir cámara</Text>
             </Pressable>
             <Pressable
               onPress={handleRetry}
-              style={({ pressed }) => [styles.actionBtnDanger, pressed && styles.actionBtnPressed]}
+              style={({ pressed }) => [
+                styles.actionBtnDanger,
+                pressed && styles.actionBtnPressed,
+              ]}
             >
-              <MaterialCommunityIcons name="trash-can-outline" size={16} color={colors.error} />
+              <MaterialCommunityIcons
+                name="trash-can-outline"
+                size={16}
+                color={colors.error}
+              />
               <Text style={styles.actionBtnTextDanger}>Eliminar</Text>
             </Pressable>
           </View>
@@ -191,23 +252,47 @@ export default function IdentifyTab() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.identityName}>{result.commonName}</Text>
                 {result.scientificName ? (
-                  <Text style={styles.identityScientific}>{result.scientificName}</Text>
+                  <Text style={styles.identityScientific}>
+                    {result.scientificName}
+                  </Text>
                 ) : null}
               </View>
             </View>
 
             <View style={styles.confidenceBlock}>
               <View style={styles.confidenceHeader}>
-                <Text style={styles.confidenceLabel}>Confianza del análisis</Text>
-                <Text style={styles.confidencePercent}>{result.confidence}%</Text>
+                <Text style={styles.confidenceLabel}>
+                  Confianza del análisis
+                </Text>
+                <Text style={styles.confidencePercent}>
+                  {result.confidence}%
+                </Text>
               </View>
-              <ConfidenceBar value={result.confidence} colors={colors} isDark={isDark} />
+              <ConfidenceBar
+                value={result.confidence}
+                colors={colors}
+                isDark={isDark}
+              />
             </View>
 
             {(result.family || result.origin) && (
               <View style={styles.metaRow}>
-                {result.family && <MetaChip icon="dna" label={result.family} colors={colors} isDark={isDark} />}
-                {result.origin && <MetaChip icon="earth" label={result.origin} colors={colors} isDark={isDark} />}
+                {result.family && (
+                  <MetaChip
+                    icon="dna"
+                    label={result.family}
+                    colors={colors}
+                    isDark={isDark}
+                  />
+                )}
+                {result.origin && (
+                  <MetaChip
+                    icon="earth"
+                    label={result.origin}
+                    colors={colors}
+                    isDark={isDark}
+                  />
+                )}
               </View>
             )}
 
@@ -264,8 +349,12 @@ export default function IdentifyTab() {
                   isDark={isDark}
                 />
                 <Tag
-                  icon={result.toxicity === "no tóxica" ? "shield-check" : "alert"}
-                  label={result.toxicity === "no tóxica" ? "No tóxica" : `Tóxica`}
+                  icon={
+                    result.toxicity === "no tóxica" ? "shield-check" : "alert"
+                  }
+                  label={
+                    result.toxicity === "no tóxica" ? "No tóxica" : `Tóxica`
+                  }
                   tone={result.toxicity === "no tóxica" ? "success" : "warning"}
                   colors={colors}
                   isDark={isDark}
@@ -274,8 +363,14 @@ export default function IdentifyTab() {
 
               {result.toxicityDetail && (
                 <View style={styles.warningCard}>
-                  <MaterialCommunityIcons name="information-outline" size={16} color={colors.accentWarm} />
-                  <Text style={styles.warningText}>{result.toxicityDetail}</Text>
+                  <MaterialCommunityIcons
+                    name="information-outline"
+                    size={16}
+                    color={colors.accentWarm}
+                  />
+                  <Text style={styles.warningText}>
+                    {result.toxicityDetail}
+                  </Text>
                 </View>
               )}
 
@@ -312,7 +407,11 @@ export default function IdentifyTab() {
                   <View style={styles.pestsRow}>
                     {result.commonPests.map((pest, i) => (
                       <View key={i} style={styles.pestChip}>
-                        <MaterialCommunityIcons name="bug-outline" size={12} color={colors.textSecondary} />
+                        <MaterialCommunityIcons
+                          name="bug-outline"
+                          size={12}
+                          color={colors.textSecondary}
+                        />
                         <Text style={styles.pestText}>{pest}</Text>
                       </View>
                     ))}
@@ -323,7 +422,11 @@ export default function IdentifyTab() {
               {result.funFact && (
                 <View style={styles.funFactCard}>
                   <View style={styles.funFactHeader}>
-                    <MaterialCommunityIcons name="lightbulb-on-outline" size={16} color={colors.accentWarm} />
+                    <MaterialCommunityIcons
+                      name="lightbulb-on-outline"
+                      size={16}
+                      color={colors.accentWarm}
+                    />
                     <Text style={styles.funFactLabel}>Dato curioso</Text>
                   </View>
                   <Text style={styles.funFactText}>{result.funFact}</Text>
@@ -339,7 +442,11 @@ export default function IdentifyTab() {
                   isSaving && styles.saveBtnDisabled,
                 ]}
               >
-                <MaterialCommunityIcons name="bookmark-plus-outline" size={20} color={colors.onPrimary} />
+                <MaterialCommunityIcons
+                  name="bookmark-plus-outline"
+                  size={20}
+                  color={colors.onPrimary}
+                />
                 <Text style={styles.saveBtnText}>
                   {isSaving ? "Guardando..." : "Guardar en Mis Plantas"}
                 </Text>
@@ -354,30 +461,50 @@ export default function IdentifyTab() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.cameraWrapper}>
-        <CameraView ref={cameraRef} style={styles.camera} facing={facing} flash={flashMode} />
+        <CameraView
+          ref={cameraRef}
+          style={styles.camera}
+          facing={facing}
+          flash={flashMode}
+        />
         <View style={styles.cameraTopBar}>
           <Pressable
             onPress={toggleFlash}
-            style={({ pressed }) => [styles.cameraControlBtn, pressed && { opacity: 0.7 }]}
+            style={({ pressed }) => [
+              styles.cameraControlBtn,
+              pressed && { opacity: 0.7 },
+            ]}
           >
             <MaterialCommunityIcons name={flashIcon} size={22} color="#fff" />
           </Pressable>
           <Pressable
             onPress={toggleFacing}
-            style={({ pressed }) => [styles.cameraControlBtn, pressed && { opacity: 0.7 }]}
+            style={({ pressed }) => [
+              styles.cameraControlBtn,
+              pressed && { opacity: 0.7 },
+            ]}
           >
-            <MaterialCommunityIcons name="camera-flip-outline" size={22} color="#fff" />
+            <MaterialCommunityIcons
+              name="camera-flip-outline"
+              size={22}
+              color="#fff"
+            />
           </Pressable>
         </View>
 
         <View style={styles.cameraBottomBar}>
           <View style={styles.cameraHintWrap}>
             <View style={styles.cameraHintDot} />
-            <Text style={styles.cameraHint}>Apunta a una planta y toma la foto</Text>
+            <Text style={styles.cameraHint}>
+              Apunta a una planta y toma la foto
+            </Text>
           </View>
           <Pressable
             onPress={() => void handleTakePhoto()}
-            style={({ pressed }) => [styles.shutterBtn, pressed && styles.shutterBtnPressed]}
+            style={({ pressed }) => [
+              styles.shutterBtn,
+              pressed && styles.shutterBtnPressed,
+            ]}
           >
             <View style={styles.shutterInner} />
           </Pressable>
@@ -387,11 +514,21 @@ export default function IdentifyTab() {
   );
 }
 
-function ConfidenceBar({ value, colors, isDark }: { value: number; colors: ThemeColors; isDark: boolean }) {
+function ConfidenceBar({
+  value,
+  colors,
+  isDark,
+}: {
+  value: number;
+  colors: ThemeColors;
+  isDark: boolean;
+}) {
   const width = useSharedValue(0);
 
   useEffect(() => {
-    width.value = withTiming(Math.max(0, Math.min(100, value)), { duration: 900 });
+    width.value = withTiming(Math.max(0, Math.min(100, value)), {
+      duration: 900,
+    });
   }, [value, width]);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -399,7 +536,12 @@ function ConfidenceBar({ value, colors, isDark }: { value: number; colors: Theme
   }));
 
   return (
-    <View style={[barStyles.track, { backgroundColor: isDark ? "#1F1F1F" : "#E4E4E7" }]}>
+    <View
+      style={[
+        barStyles.track,
+        { backgroundColor: isDark ? "#1F1F1F" : "#E4E4E7" },
+      ]}
+    >
       <Animated.View
         style={[
           barStyles.fill,
@@ -461,7 +603,11 @@ function MetaChip({
   const s = createStyles(colors, isDark);
   return (
     <View style={s.metaChip}>
-      <MaterialCommunityIcons name={icon} size={12} color={colors.textSecondary} />
+      <MaterialCommunityIcons
+        name={icon}
+        size={12}
+        color={colors.textSecondary}
+      />
       <Text style={s.metaChipText}>{label}</Text>
     </View>
   );
@@ -481,7 +627,11 @@ function Tag({
   isDark: boolean;
 }) {
   const toneColor =
-    tone === "success" ? colors.primary : tone === "warning" ? colors.error : colors.textSecondary;
+    tone === "success"
+      ? colors.primary
+      : tone === "warning"
+        ? colors.error
+        : colors.textSecondary;
   const bgColor =
     tone === "success"
       ? isDark
@@ -546,7 +696,10 @@ function FullScreenLoader({
 
   useEffect(() => {
     scale.value = withRepeat(
-      withSequence(withTiming(1.1, { duration: 700 }), withTiming(1, { duration: 700 })),
+      withSequence(
+        withTiming(1.1, { duration: 700 }),
+        withTiming(1, { duration: 700 }),
+      ),
       -1,
       false,
     );
@@ -567,11 +720,26 @@ function FullScreenLoader({
 }
 
 const LOADER_MESSAGES = [
-  { title: "Procesando imagen", subtitle: "Optimizando la fotografía antes de enviarla al modelo." },
-  { title: "Conectando con Gemini", subtitle: "Despertando el servidor y abriendo conexión con la IA." },
-  { title: "Analizando hojas y forma", subtitle: "El modelo está extrayendo características visuales." },
-  { title: "Buscando coincidencias", subtitle: "Comparando con miles de especies en el catálogo botánico." },
-  { title: "Generando recomendaciones", subtitle: "Preparando consejos de cuidado personalizados para ti." },
+  {
+    title: "Procesando imagen",
+    subtitle: "Optimizando la fotografía antes de enviarla al modelo.",
+  },
+  {
+    title: "Conectando con Gemini",
+    subtitle: "Despertando el servidor y abriendo conexión con la IA.",
+  },
+  {
+    title: "Analizando hojas y forma",
+    subtitle: "El modelo está extrayendo características visuales.",
+  },
+  {
+    title: "Buscando coincidencias",
+    subtitle: "Comparando con miles de especies en el catálogo botánico.",
+  },
+  {
+    title: "Generando recomendaciones",
+    subtitle: "Preparando consejos de cuidado personalizados para ti.",
+  },
 ];
 
 function IdentifyingLoader({
@@ -598,7 +766,10 @@ function IdentifyingLoader({
       false,
     );
     dotOpacity.value = withRepeat(
-      withSequence(withTiming(1, { duration: 600 }), withTiming(0.3, { duration: 600 })),
+      withSequence(
+        withTiming(1, { duration: 600 }),
+        withTiming(0.3, { duration: 600 }),
+      ),
       -1,
       false,
     );
@@ -625,18 +796,56 @@ function IdentifyingLoader({
     <SafeAreaView style={s.container}>
       <View style={s.identifyingContent}>
         <View style={s.identifyingPhotoWrap}>
-          {photoUri && <Image source={{ uri: photoUri }} style={s.identifyingPhoto} />}
+          {photoUri && (
+            <Image source={{ uri: photoUri }} style={s.identifyingPhoto} />
+          )}
           <View style={s.identifyingScanOverlay} />
-          <Animated.View style={[s.identifyingScanLine, scanStyle, { backgroundColor: colors.primary }]} />
-          <View style={[s.identifyingCorner, s.cornerTL, { borderColor: colors.primary }]} />
-          <View style={[s.identifyingCorner, s.cornerTR, { borderColor: colors.primary }]} />
-          <View style={[s.identifyingCorner, s.cornerBL, { borderColor: colors.primary }]} />
-          <View style={[s.identifyingCorner, s.cornerBR, { borderColor: colors.primary }]} />
+          <Animated.View
+            style={[
+              s.identifyingScanLine,
+              scanStyle,
+              { backgroundColor: colors.primary },
+            ]}
+          />
+          <View
+            style={[
+              s.identifyingCorner,
+              s.cornerTL,
+              { borderColor: colors.primary },
+            ]}
+          />
+          <View
+            style={[
+              s.identifyingCorner,
+              s.cornerTR,
+              { borderColor: colors.primary },
+            ]}
+          />
+          <View
+            style={[
+              s.identifyingCorner,
+              s.cornerBL,
+              { borderColor: colors.primary },
+            ]}
+          />
+          <View
+            style={[
+              s.identifyingCorner,
+              s.cornerBR,
+              { borderColor: colors.primary },
+            ]}
+          />
         </View>
 
         <View style={s.identifyingTextWrap}>
           <View style={s.identifyingStatus}>
-            <Animated.View style={[s.identifyingDot, dotStyle, { backgroundColor: colors.primary }]} />
+            <Animated.View
+              style={[
+                s.identifyingDot,
+                dotStyle,
+                { backgroundColor: colors.primary },
+              ]}
+            />
             <Text style={s.identifyingStatusText}>Analizando con IA</Text>
           </View>
           <Text style={s.identifyingTitle}>{message.title}</Text>

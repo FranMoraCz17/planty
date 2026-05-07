@@ -244,6 +244,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
         locationName: data.locationName,
         wateringFrequencyLabel: data.wateringFrequencyLabel,
         createdAt: new Date().toISOString(),
+        photoUri: data.photoUri,
       });
 
       const refreshedPlants = await getPlantsByUserFromFirestore(currentUserId);

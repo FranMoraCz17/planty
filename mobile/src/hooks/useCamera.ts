@@ -1,4 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from "react";
+import { AppState } from "react-native";
 import { CameraView, CameraType, FlashMode } from "expo-camera";
 
 import CameraService, { PhotoResult, CaptureOptions } from "@/src/services/cameraService";
@@ -58,6 +59,18 @@ export function useCamera(options: UseCameraOptions = {}): UseCameraReturn {
       void requestPermissions();
     }
   }, [requestOnMount, requestPermissions]);
+
+  // Re-verifica permisos cuando el usuario vuelve desde Ajustes del sistema
+  useEffect(() => {
+    let prev = AppState.currentState;
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (prev.match(/inactive|background/) && nextState === "active") {
+        void requestPermissions();
+      }
+      prev = nextState;
+    });
+    return () => subscription.remove();
+  }, [requestPermissions]);
 
   const takePhoto = useCallback(async (opts: CaptureOptions = {}): Promise<PhotoResult | null> => {
     setError(null);
