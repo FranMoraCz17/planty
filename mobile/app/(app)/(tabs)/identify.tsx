@@ -581,27 +581,44 @@ export default function IdentifyTab() {
         />
         <View style={styles.cameraTopBar}>
           <Pressable
-            onPress={toggleFlash}
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar camara"
+            onPress={() => router.replace("/(app)/(tabs)")}
             style={({ pressed }) => [
               styles.cameraControlBtn,
               pressed && { opacity: 0.7 },
             ]}
           >
-            <MaterialCommunityIcons name={flashIcon} size={22} color="#fff" />
+            <MaterialCommunityIcons name="close" size={22} color="#fff" />
           </Pressable>
-          <Pressable
-            onPress={toggleFacing}
-            style={({ pressed }) => [
-              styles.cameraControlBtn,
-              pressed && { opacity: 0.7 },
-            ]}
-          >
-            <MaterialCommunityIcons
-              name="camera-flip-outline"
-              size={22}
-              color="#fff"
-            />
-          </Pressable>
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cambiar flash"
+              onPress={toggleFlash}
+              style={({ pressed }) => [
+                styles.cameraControlBtn,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <MaterialCommunityIcons name={flashIcon} size={22} color="#fff" />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cambiar camara"
+              onPress={toggleFacing}
+              style={({ pressed }) => [
+                styles.cameraControlBtn,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="camera-flip-outline"
+                size={22}
+                color="#fff"
+              />
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.cameraBottomBar}>
@@ -1085,9 +1102,11 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     cameraTopBar: {
       position: "absolute",
       top: Spacing.lg,
+      left: Spacing.lg,
       right: Spacing.lg,
       flexDirection: "row",
-      gap: Spacing.sm,
+      alignItems: "center",
+      justifyContent: "space-between",
     },
     cameraControlBtn: {
       width: 42,
