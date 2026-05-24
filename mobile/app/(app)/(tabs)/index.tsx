@@ -35,9 +35,9 @@ const tools = [
   {
     key: "diagnostico",
     title: "Diagnosticar",
-    subtitle: "Verifica salud",
+    subtitle: "Foto de hoja",
     icon: "heart-pulse",
-    route: "/(app)/(tabs)/care",
+    route: "/(app)/(tabs)/diagnose",
   },
   {
     key: "identificar",
@@ -55,10 +55,10 @@ const tools = [
   },
   {
     key: "recordatorios",
-    title: "Recordatorios",
+    title: "Calendario",
     subtitle: "Agenda de riego",
     icon: "calendar-check",
-    route: "/(app)/(tabs)/care",
+    route: "/(app)/(tabs)/calendar",
   },
 ] as const;
 
