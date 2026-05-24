@@ -137,74 +137,48 @@ export default function DiagnoseScreen() {
     setScreenState("intro");
   };
 
-  // ESTADO: cargando permisos
+  // CARGA DE PERMISOS
   if (isLoadingPermissions) {
     return (
       <SafeAreaView style={styles.container}>
         <TopBar title="Diagnostico" subtitle="Salud por foto" />
         <View style={styles.centered}>
           <ActivityIndicator color={colors.primary} />
-          <Text style={styles.body}>Solicitando permisos...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  // ESTADO: permiso denegado
-  if (
-    screenState === "camera" &&
-    permissions &&
-    !isPermissionGranted
-  ) {
+  // PERMISO DENEGADO
+  if (screenState === "camera" && permissions && !isPermissionGranted) {
     return (
       <SafeAreaView style={styles.container}>
         <TopBar title="Diagnostico" subtitle="Permiso necesario" />
-        <ScrollView contentContainerStyle={styles.content}>
-          <View style={styles.permissionCard}>
-            <MaterialCommunityIcons
-              name="camera-off-outline"
-              size={32}
-              color={colors.primary}
-            />
-            <Text style={styles.title}>Necesitamos la camara</Text>
-            <Text style={styles.body}>
-              Para diagnosticar el estado de tu planta necesitamos acceso a la
-              camara. Puedes habilitarlo desde la configuracion del sistema.
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Abrir configuracion del sistema"
-              onPress={() => void Linking.openSettings()}
-              style={({ pressed }) => [
-                styles.primaryButton,
-                pressed && styles.primaryButtonPressed,
-              ]}
-            >
-              <Text style={styles.primaryButtonText}>Abrir configuracion</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Volver al inicio del diagnostico"
-              onPress={reset}
-              style={styles.secondaryButton}
-            >
-              <Text style={styles.secondaryButtonText}>Volver</Text>
-            </Pressable>
-          </View>
-        </ScrollView>
+        <View style={styles.centered}>
+          <MaterialCommunityIcons
+            name="camera-off-outline"
+            size={48}
+            color={colors.textSecondary}
+          />
+          <Text style={styles.emptyText}>
+            Habilita el acceso a la camara desde la configuracion del sistema.
+          </Text>
+          <Pressable
+            onPress={() => void Linking.openSettings()}
+            style={({ pressed }) => [styles.linkBtn, pressed && styles.pressed]}
+          >
+            <Text style={styles.linkBtnText}>Abrir configuracion</Text>
+          </Pressable>
+        </View>
       </SafeAreaView>
     );
   }
 
-  // ESTADO: camara abierta
+  // CAMARA
   if (screenState === "camera" && isPermissionGranted) {
     return (
       <SafeAreaView style={styles.container}>
-        <CameraView
-          ref={cameraRef}
-          style={styles.fullCamera}
-          facing="back"
-        >
+        <CameraView ref={cameraRef} style={styles.fullCamera} facing="back">
           <View style={styles.cameraOverlay}>
             <Pressable
               accessibilityRole="button"
@@ -212,18 +186,8 @@ export default function DiagnoseScreen() {
               onPress={reset}
               style={styles.cameraCloseBtn}
             >
-              <MaterialCommunityIcons
-                name="close"
-                size={22}
-                color="#FFFFFF"
-              />
+              <MaterialCommunityIcons name="close" size={22} color="#FFFFFF" />
             </Pressable>
-
-            <View style={styles.cameraGuide}>
-              <Text style={styles.cameraGuideText}>
-                Acerca la camara a la hoja afectada
-              </Text>
-            </View>
 
             <View style={styles.cameraBottom}>
               <Pressable
@@ -241,7 +205,7 @@ export default function DiagnoseScreen() {
     );
   }
 
-  // ESTADO: cargando diagnostico
+  // LOADING
   if (screenState === "loading") {
     return (
       <SafeAreaView style={styles.container}>
@@ -251,17 +215,12 @@ export default function DiagnoseScreen() {
             <Image source={{ uri: photoUri }} style={styles.previewImage} />
           ) : null}
           <ActivityIndicator color={colors.primary} size="large" />
-          <Text style={styles.title}>Analizando tu planta</Text>
-          <Text style={styles.body}>
-            La IA esta revisando hojas, color y posibles signos de plagas o
-            deficiencias. Esto puede tomar unos segundos.
-          </Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  // ESTADO: resultado
+  // RESULTADO
   if (screenState === "result" && result) {
     const tone = HEALTH_TONE[result.healthStatus];
     return (
@@ -275,7 +234,6 @@ export default function DiagnoseScreen() {
             <Image source={{ uri: photoUri }} style={styles.resultImage} />
           ) : null}
 
-          {/* Estado general */}
           <View
             style={[
               styles.healthCard,
@@ -300,7 +258,6 @@ export default function DiagnoseScreen() {
             <Text style={styles.healthSummary}>{result.healthSummary}</Text>
           </View>
 
-          {/* Issues */}
           {result.issues.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Problemas detectados</Text>
@@ -341,7 +298,6 @@ export default function DiagnoseScreen() {
             </View>
           )}
 
-          {/* Acciones inmediatas */}
           {result.immediateActions.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Acciones inmediatas</Text>
@@ -360,15 +316,14 @@ export default function DiagnoseScreen() {
             </View>
           )}
 
-          {/* Prevencion */}
           {result.preventiveTips.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Consejos preventivos</Text>
+              <Text style={styles.sectionTitle}>Prevencion</Text>
               <View style={styles.listCard}>
                 {result.preventiveTips.map((tip, idx) => (
                   <View key={`tip-${idx}`} style={styles.listItem}>
                     <MaterialCommunityIcons
-                      name="shield-leaf-outline"
+                      name="shield-outline"
                       size={16}
                       color={colors.primary}
                     />
@@ -396,106 +351,40 @@ export default function DiagnoseScreen() {
           ) : null}
 
           <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Hacer otro diagnostico"
             onPress={reset}
-            style={({ pressed }) => [
-              styles.primaryButton,
-              pressed && styles.primaryButtonPressed,
-            ]}
+            style={({ pressed }) => [styles.linkBtn, pressed && styles.pressed]}
           >
-            <Text style={styles.primaryButtonText}>Hacer otro diagnostico</Text>
+            <Text style={styles.linkBtnText}>Hacer otro diagnostico</Text>
           </Pressable>
         </ScrollView>
       </SafeAreaView>
     );
   }
 
-  // ESTADO: intro (default)
+  // INTRO MINIMAL + FAB
   return (
     <SafeAreaView style={styles.container}>
-      <TopBar title="Diagnostico" subtitle="Analiza la salud" />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.heroCard}>
-          <View style={styles.heroIcon}>
-            <MaterialCommunityIcons
-              name="stethoscope"
-              size={28}
-              color={colors.onPrimary}
-            />
-          </View>
-          <Text style={styles.title}>Diagnostica tu planta</Text>
-          <Text style={styles.body}>
-            Toma una foto cercana a las hojas o tallos. La IA detecta plagas,
-            enfermedades, deficiencias nutricionales y problemas de cuidado.
-          </Text>
-        </View>
-
-        {error ? (
-          <View style={styles.errorCard}>
-            <MaterialCommunityIcons
-              name="alert-circle-outline"
-              size={20}
-              color="#B91C1C"
-            />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
-
-        <View style={styles.tipsCard}>
-          <Text style={styles.subtitle}>Tips para una mejor foto</Text>
-          <View style={styles.tipItem}>
-            <MaterialCommunityIcons
-              name="white-balance-sunny"
-              size={18}
-              color={colors.primary}
-            />
-            <Text style={styles.tipText}>
-              Usa luz natural, evita sombras fuertes.
-            </Text>
-          </View>
-          <View style={styles.tipItem}>
-            <MaterialCommunityIcons
-              name="leaf-maple"
-              size={18}
-              color={colors.primary}
-            />
-            <Text style={styles.tipText}>
-              Enfoca la parte mas afectada de la planta.
-            </Text>
-          </View>
-          <View style={styles.tipItem}>
-            <MaterialCommunityIcons
-              name="image-frame"
-              size={18}
-              color={colors.primary}
-            />
-            <Text style={styles.tipText}>
-              Acerca la camara, sin mover ni desenfocar.
-            </Text>
-          </View>
-        </View>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Abrir camara para diagnosticar"
-          onPress={() => void openCamera()}
-          style={({ pressed }) => [
-            styles.primaryButton,
-            pressed && styles.primaryButtonPressed,
-          ]}
-        >
+      <TopBar title="Diagnostico" subtitle="Salud por foto" />
+      <View style={styles.emptyState}>
+        <View style={styles.emptyIconWrap}>
           <MaterialCommunityIcons
-            name="camera"
-            size={18}
-            color={colors.onPrimary}
+            name="stethoscope"
+            size={48}
+            color={colors.textSecondary}
           />
-          <Text style={styles.primaryButtonText}>Abrir camara</Text>
-        </Pressable>
-      </ScrollView>
+        </View>
+        <Text style={styles.emptyText}>Toma una foto para empezar.</Text>
+        {error ? <Text style={styles.errorInline}>{error}</Text> : null}
+      </View>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Abrir camara para diagnosticar"
+        onPress={() => void openCamera()}
+        style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
+      >
+        <MaterialCommunityIcons name="camera" size={24} color={colors.onPrimary} />
+      </Pressable>
     </SafeAreaView>
   );
 }
@@ -506,16 +395,6 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       flex: 1,
       backgroundColor: colors.surface,
     },
-    content: {
-      padding: Spacing.lg,
-      paddingBottom: 120,
-      gap: Spacing.md,
-    },
-    resultContent: {
-      padding: Spacing.lg,
-      paddingBottom: 140,
-      gap: Spacing.md,
-    },
     centered: {
       flex: 1,
       alignItems: "center",
@@ -523,115 +402,69 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       padding: Spacing.lg,
       gap: Spacing.md,
     },
-    heroCard: {
-      backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: Spacing.lg,
-      gap: Spacing.sm,
-      alignItems: "flex-start",
-    },
-    heroIcon: {
-      width: 48,
-      height: 48,
-      borderRadius: BorderRadius.full,
-      backgroundColor: colors.primary,
+    emptyState: {
+      flex: 1,
       alignItems: "center",
       justifyContent: "center",
-      marginBottom: Spacing.xs,
+      padding: Spacing.xl,
+      gap: Spacing.md,
     },
-    title: {
-      color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize + 6,
-      fontWeight: "800",
-      lineHeight: Typography.body.lineHeight + 6,
+    emptyIconWrap: {
+      width: 88,
+      height: 88,
+      borderRadius: 44,
+      backgroundColor: colors.surfaceCard,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: "center",
+      justifyContent: "center",
     },
-    subtitle: {
-      color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize + 2,
-      fontWeight: "700",
-      lineHeight: Typography.body.lineHeight + 2,
-    },
-    body: {
+    emptyText: {
       color: colors.textSecondary,
       fontFamily: Typography.family,
       fontSize: Typography.body.fontSize,
-      lineHeight: Typography.body.lineHeight + 2,
+      textAlign: "center",
+      maxWidth: 280,
     },
-    tipsCard: {
-      backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: Spacing.md,
-      gap: Spacing.sm,
-    },
-    tipItem: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: Spacing.sm,
-    },
-    tipText: {
-      flex: 1,
-      color: colors.textSecondary,
+    errorInline: {
+      color: isDark ? "#FECACA" : "#B91C1C",
       fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize - 1,
+      fontSize: Typography.caption.fontSize + 1,
+      fontWeight: "600",
+      textAlign: "center",
+      marginTop: Spacing.sm,
     },
-    primaryButton: {
-      flexDirection: "row",
+    fab: {
+      position: "absolute",
+      right: Spacing.lg,
+      bottom: 100,
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: colors.primary,
       alignItems: "center",
       justifyContent: "center",
-      gap: Spacing.sm,
-      backgroundColor: colors.primary,
-      borderRadius: BorderRadius.full,
-      paddingVertical: 14,
-      paddingHorizontal: Spacing.lg,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.4,
+      shadowRadius: 12,
+      elevation: 10,
     },
-    primaryButtonPressed: {
+    fabPressed: {
       opacity: 0.85,
     },
-    primaryButtonText: {
-      color: colors.onPrimary,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize,
-      fontWeight: "800",
+    pressed: {
+      opacity: 0.6,
     },
-    secondaryButton: {
+    linkBtn: {
       paddingVertical: 12,
       alignItems: "center",
     },
-    secondaryButtonText: {
+    linkBtnText: {
       color: colors.primary,
       fontFamily: Typography.family,
       fontSize: Typography.body.fontSize,
       fontWeight: "700",
-    },
-    errorCard: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: Spacing.sm,
-      backgroundColor: isDark ? "#3B201D" : "#FBE1DE",
-      borderRadius: BorderRadius.md,
-      padding: Spacing.md,
-    },
-    errorText: {
-      flex: 1,
-      color: isDark ? "#FECACA" : "#7F1D1D",
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize - 1,
-      fontWeight: "600",
-    },
-    permissionCard: {
-      backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: Spacing.lg,
-      gap: Spacing.md,
-      alignItems: "center",
     },
     fullCamera: {
       flex: 1,
@@ -649,19 +482,6 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       alignItems: "center",
       justifyContent: "center",
       alignSelf: "flex-start",
-    },
-    cameraGuide: {
-      alignSelf: "center",
-      backgroundColor: "rgba(0,0,0,0.5)",
-      paddingHorizontal: Spacing.md,
-      paddingVertical: Spacing.sm,
-      borderRadius: BorderRadius.full,
-    },
-    cameraGuideText: {
-      color: "#FFFFFF",
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize - 1,
-      fontWeight: "600",
     },
     cameraBottom: {
       alignItems: "center",
@@ -687,7 +507,11 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       width: 140,
       height: 140,
       borderRadius: BorderRadius.lg,
-      marginBottom: Spacing.md,
+    },
+    resultContent: {
+      padding: Spacing.lg,
+      paddingBottom: 140,
+      gap: Spacing.md,
     },
     resultImage: {
       width: "100%",

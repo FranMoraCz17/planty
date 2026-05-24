@@ -191,28 +191,12 @@ export default function CalendarScreen() {
           />
         </View>
 
-        <View style={styles.dayHeader}>
-          <Text style={styles.dayHeaderTitle}>
-            {isoToFriendly(selectedDate)}
-          </Text>
-          <Text style={styles.dayHeaderCount}>
-            {tasksForSelectedDay.length === 0
-              ? "Sin tareas"
-              : `${tasksForSelectedDay.length} tarea${tasksForSelectedDay.length > 1 ? "s" : ""}`}
-          </Text>
-        </View>
+        <Text style={styles.dayHeaderTitle}>
+          {isoToFriendly(selectedDate)}
+        </Text>
 
         {tasksForSelectedDay.length === 0 ? (
-          <View style={styles.emptyBlock}>
-            <MaterialCommunityIcons
-              name="leaf-off"
-              size={24}
-              color={colors.textSecondary}
-            />
-            <Text style={styles.emptyText}>
-              No hay riegos programados para este dia. Toca otro dia en el calendario para ver mas tareas.
-            </Text>
-          </View>
+          <Text style={styles.emptyText}>Sin tareas para este dia.</Text>
         ) : (
           tasksForSelectedDay.map((task) => (
             <View key={`${task.plantId}-${task.date}`} style={styles.taskCard}>
@@ -229,25 +213,9 @@ export default function CalendarScreen() {
                   {task.scientificName} - cada {task.cycleDays} dias
                 </Text>
               </View>
-              <View style={styles.taskBadge}>
-                <Text style={styles.taskBadgeText}>Riego</Text>
-              </View>
             </View>
           ))
         )}
-
-        {plants.length === 0 ? (
-          <View style={styles.emptyBlock}>
-            <MaterialCommunityIcons
-              name="plus-circle-outline"
-              size={24}
-              color={colors.primary}
-            />
-            <Text style={styles.emptyText}>
-              Agrega plantas a tu coleccion para generar el calendario automatico de riegos.
-            </Text>
-          </View>
-        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -273,24 +241,13 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       paddingHorizontal: Spacing.xs,
       overflow: "hidden",
     },
-    dayHeader: {
-      flexDirection: "row",
-      alignItems: "baseline",
-      justifyContent: "space-between",
-      marginTop: Spacing.sm,
-    },
     dayHeaderTitle: {
       color: colors.text,
       fontFamily: Typography.family,
       fontSize: Typography.body.fontSize + 2,
       fontWeight: "800",
       textTransform: "capitalize",
-    },
-    dayHeaderCount: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
-      fontWeight: "600",
+      marginTop: Spacing.sm,
     },
     taskCard: {
       flexDirection: "row",
@@ -326,36 +283,11 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontSize: Typography.caption.fontSize + 1,
       fontWeight: "500",
     },
-    taskBadge: {
-      backgroundColor: isDark ? "#1F3430" : "#E5F3EE",
-      borderRadius: BorderRadius.full,
-      paddingHorizontal: Spacing.sm,
-      paddingVertical: 4,
-    },
-    taskBadgeText: {
-      color: colors.primary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize,
-      fontWeight: "700",
-      textTransform: "uppercase",
-      letterSpacing: 0.4,
-    },
-    emptyBlock: {
-      borderWidth: 1,
-      borderStyle: "dashed",
-      borderColor: colors.border,
-      borderRadius: BorderRadius.lg,
-      padding: Spacing.lg,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: Spacing.md,
-    },
     emptyText: {
-      flex: 1,
       color: colors.textSecondary,
       fontFamily: Typography.family,
       fontSize: Typography.body.fontSize - 1,
       fontWeight: "500",
-      lineHeight: Typography.body.lineHeight,
+      paddingVertical: Spacing.md,
     },
   });

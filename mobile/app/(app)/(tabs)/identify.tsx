@@ -147,38 +147,31 @@ export default function IdentifyTab() {
   if (!isPermissionGranted) {
     return (
       <SafeAreaView style={styles.container}>
-        <TopBar title="Identificar" subtitle="Permiso requerido" />
-        <ScrollView contentContainerStyle={[styles.content, styles.centered]}>
-          <View style={styles.permissionCard}>
-            <View style={styles.permissionIconWrap}>
-              <MaterialCommunityIcons
-                name="camera-off"
-                size={32}
-                color={colors.textSecondary}
-              />
-            </View>
-            <Text style={styles.permissionTitle}>Cámara sin acceso</Text>
-            <Text style={styles.permissionBody}>
-              Planty necesita acceso a tu cámara para identificar plantas. Sin
-              este permiso la identificación no estará disponible, pero puedes
-              seguir usando el resto de la app.
+        <TopBar title="Identificar" subtitle="Permiso necesario" />
+        <View style={[styles.content, styles.centered]}>
+          <MaterialCommunityIcons
+            name="camera-off"
+            size={48}
+            color={colors.textSecondary}
+          />
+          <Text style={styles.permissionBody}>
+            Habilita la camara para identificar plantas.
+          </Text>
+          <Pressable
+            onPress={() => void requestPermissions()}
+            style={({ pressed }) => [
+              styles.primaryBtn,
+              pressed && styles.primaryBtnPressed,
+            ]}
+          >
+            <Text style={styles.primaryBtnText}>Solicitar permisos</Text>
+          </Pressable>
+          <Pressable onPress={handleOpenSettings} style={styles.settingsLink}>
+            <Text style={styles.settingsLinkText}>
+              Abrir configuracion del sistema
             </Text>
-            <Pressable
-              onPress={() => void requestPermissions()}
-              style={({ pressed }) => [
-                styles.primaryBtn,
-                pressed && styles.primaryBtnPressed,
-              ]}
-            >
-              <Text style={styles.primaryBtnText}>Solicitar permisos</Text>
-            </Pressable>
-            <Pressable onPress={handleOpenSettings} style={styles.settingsLink}>
-              <Text style={styles.settingsLinkText}>
-                Abrir configuración del sistema
-              </Text>
-            </Pressable>
-          </View>
-        </ScrollView>
+          </Pressable>
+        </View>
       </SafeAreaView>
     );
   }
