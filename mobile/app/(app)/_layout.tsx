@@ -3,6 +3,7 @@ import { View } from "react-native";
 import { useDemoData } from "@/src/data/DemoDataProvider";
 import { useNetworkStatus } from "@/src/hooks/useNetworkStatus";
 import OfflineBanner from "@/src/components/ui/OfflineBanner";
+import { TabBarVisibilityProvider } from "@/src/components/layout/TabBarVisibilityContext";
 
 export default function AppLayout() {
   const { isReady, isAuthenticated } = useDemoData();
@@ -17,9 +18,11 @@ export default function AppLayout() {
   }
 
   return (
-    <View style={{ flex: 1 }}>
-      {!isConnected && <OfflineBanner />}
-      <Stack screenOptions={{ headerShown: false }} />
-    </View>
+    <TabBarVisibilityProvider>
+      <View style={{ flex: 1 }}>
+        {!isConnected && <OfflineBanner />}
+        <Stack screenOptions={{ headerShown: false }} />
+      </View>
+    </TabBarVisibilityProvider>
   );
 }

@@ -14,6 +14,11 @@ import {
   type UserDocument,
   updateUserById,
 } from "@/src/services/userService";
+import AreaService, {
+  type AreaDocument,
+  type CreateAreaInput,
+  type UpdateAreaInput,
+} from "@/src/services/areaService";
 
 export type EditableUserFields = Pick<UserDocument, "name" | "username" | "email" | "city">;
 export type EditablePlantFields = Pick<
@@ -32,8 +37,11 @@ interface DemoDataContextValue {
   currentUser: UserDocument | null;
   users: UserDocument[];
   plants: PlantDocument[];
+  areas: AreaDocument[];
   getPlantById: (id: string) => PlantDocument | null;
   getPlantsByUser: (userId: string) => PlantDocument[];
+  getAreaById: (id: string) => AreaDocument | null;
+  getPlantsByArea: (areaId: string) => PlantDocument[];
   updateUser: (
     id: string,
     data: EditableUserFields,
@@ -46,6 +54,10 @@ interface DemoDataContextValue {
   ) => Promise<PlantDocument>;
   createPlant: (data: EditablePlantFields, options?: UpdateOptions) => Promise<PlantDocument>;
   deletePlant: (id: string, options?: UpdateOptions) => Promise<void>;
+  createArea: (data: CreateAreaInput) => Promise<AreaDocument>;
+  updateArea: (id: string, data: UpdateAreaInput) => Promise<AreaDocument>;
+  deleteArea: (id: string) => Promise<void>;
+  refreshAreas: () => Promise<void>;
   refreshCurrentUser: () => Promise<void>;
 }
 

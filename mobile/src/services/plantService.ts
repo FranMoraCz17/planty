@@ -22,13 +22,14 @@ export interface PlantDocument {
   wateringFrequencyLabel: string;
   createdAt: string;
   photoUri?: string;
+  areaId?: string | null;
 }
 
 export type CreatePlantInput = PlantDocument;
 export type UpdatePlantInput = Pick<
   PlantDocument,
   "name" | "scientificName" | "locationName" | "wateringFrequencyLabel"
-> & { photoUri?: string };
+> & { photoUri?: string; areaId?: string | null };
 
 interface FirestorePlantDocument {
   id?: string;
@@ -42,6 +43,7 @@ interface FirestorePlantDocument {
   createdAt?: string;
   updatedAt?: string;
   photoUri?: string;
+  areaId?: string | null;
 }
 
 const mapPlantDocument = (id: string, raw: FirestorePlantDocument): PlantDocument => ({
@@ -53,6 +55,7 @@ const mapPlantDocument = (id: string, raw: FirestorePlantDocument): PlantDocumen
   wateringFrequencyLabel: raw.wateringFrequencyLabel?.trim() || "Cada 7 dias",
   createdAt: raw.createdAt ?? new Date().toISOString(),
   photoUri: raw.photoUri,
+  areaId: raw.areaId ?? null,
 });
 
 export async function getPlantsByUser(
@@ -102,6 +105,7 @@ export async function createPlant(data: CreatePlantInput): Promise<string> {
       wateringFrequencyLabel: data.wateringFrequencyLabel,
       createdAt: data.createdAt || new Date().toISOString(),
       ...(data.photoUri ? { photoUri: data.photoUri } : {}),
+      ...(data.areaId ? { areaId: data.areaId } : {}),
     });
 
     return plantRef.id;
@@ -136,6 +140,8 @@ export async function updatePlantById(
       locationName: data.locationName,
       wateringFrequencyLabel: data.wateringFrequencyLabel,
       updatedAt: new Date().toISOString(),
+      ...(data.photoUri !== undefined ? { photoUri: data.photoUri } : {}),
+      ...(data.areaId !== undefined ? { areaId: data.areaId } : {}),
     });
 
     const updatedPlant = await getPlantById(id);

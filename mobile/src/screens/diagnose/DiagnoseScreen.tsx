@@ -14,6 +14,7 @@ import {
 import { CameraView } from "expo-camera";
 import TopBar from "@/src/components/layout/TopBar";
 import { useCamera } from "@/src/hooks/useCamera";
+import { useHideTabBar } from "@/src/hooks/useHideTabBar";
 import DiagnoseService, {
   type DiagnoseHealthStatus,
   type DiagnoseIssueCategory,
@@ -101,6 +102,8 @@ export default function DiagnoseScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [result, setResult] = useState<DiagnoseResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useHideTabBar(screenState === "camera");
 
   const openCamera = async () => {
     setError(null);

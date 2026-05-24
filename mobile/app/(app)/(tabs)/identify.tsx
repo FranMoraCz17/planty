@@ -3,6 +3,7 @@ import { CameraView } from "expo-camera";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import TopBar from "@/src/components/layout/TopBar";
+import { useHideTabBar } from "@/src/hooks/useHideTabBar";
 import {
   Alert,
   Image,
@@ -59,6 +60,9 @@ export default function IdentifyTab() {
   const [result, setResult] = useState<PlantIdentifyResult | null>(null);
   const [lastPhotoUri, setLastPhotoUri] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Cuando la camara esta a pantalla completa Y con permiso, ocultamos la tab bar
+  useHideTabBar(screenState === "camera" && isPermissionGranted);
 
   const flashIcon: IconName =
     flashMode === "on"

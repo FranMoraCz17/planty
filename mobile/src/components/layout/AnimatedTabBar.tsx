@@ -14,6 +14,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { BorderRadius, Spacing, Typography } from "@/src/theme/designSystem";
 import { useAppTheme } from "@/src/theme/ThemeProvider";
+import { useTabBarVisibility } from "./TabBarVisibilityContext";
 
 const TAB_BAR_HEIGHT = 64;
 const TAB_BAR_BOTTOM = 18;
@@ -49,6 +50,7 @@ export default function AnimatedTabBar({
   navigation,
 }: BottomTabBarProps) {
   const { colors, isDark } = useAppTheme();
+  const { hidden } = useTabBarVisibility();
   const [layouts, setLayouts] = useState<Record<number, SlotLayout>>({});
 
   const pillX = useRef(new Animated.Value(0)).current;
@@ -100,6 +102,10 @@ export default function AnimatedTabBar({
       navigation.navigate(routeName as never);
     }
   };
+
+  if (hidden) {
+    return null;
+  }
 
   return (
     <View style={styles.wrapper} pointerEvents="box-none">
