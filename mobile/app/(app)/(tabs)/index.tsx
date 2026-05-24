@@ -1,7 +1,7 @@
+import { useMemo } from "react";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
-  Image,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -9,6 +9,8 @@ import {
   Text,
   View,
 } from "react-native";
+import { useDemoData } from "@/src/data/DemoDataProvider";
+import TopBar from "@/src/components/layout/TopBar";
 import {
   BorderRadius,
   Spacing,
@@ -16,6 +18,18 @@ import {
   type ThemeColors,
 } from "@/src/theme/designSystem";
 import { useAppTheme } from "@/src/theme/ThemeProvider";
+
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Buenos dias";
+  if (hour < 19) return "Buenas tardes";
+  return "Buenas noches";
+}
+
+function getFirstName(fullName: string | undefined): string {
+  if (!fullName) return "";
+  return fullName.trim().split(/\s+/)[0];
+}
 
 const tools = [
   {
@@ -48,41 +62,58 @@ const tools = [
   },
 ] as const;
 
-const highlights = [
-  { id: "h1", title: "Luz filtrada", subtitle: "Sala norte", icon: "white-balance-sunny" },
-  { id: "h2", title: "Riego en 2 dias", subtitle: "Monstera", icon: "water" },
-  { id: "h3", title: "Nueva hoja", subtitle: "Pothos", icon: "leaf" },
-] as const;
-
-const profilePhotoUri: string | null = null;
-
 export default function HomeTab() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
+  const { currentUser, plants } = useDemoData();
   const styles = createStyles(colors, isDark);
+
+  const firstName = getFirstName(currentUser?.name);
+  const greetingLabel = firstName
+    ? `${getGreeting()}, ${firstName}`
+    : getGreeting();
+
+  const highlights = useMemo(() => {
+    const items: { id: string; title: string; subtitle: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }[] = [];
+
+    const plantCount = plants.length;
+    items.push({
+      id: "count",
+      title: plantCount === 1 ? "1 planta activa" : `${plantCount} plantas activas`,
+      subtitle: "en tu coleccion",
+      icon: "sprout",
+    });
+
+    const featured = plants[0];
+    if (featured) {
+      items.push({
+        id: "featured",
+        title: featured.name,
+        subtitle: featured.locationName || "Sin ubicacion",
+        icon: "leaf",
+      });
+      items.push({
+        id: "watering",
+        title: featured.wateringFrequencyLabel,
+        subtitle: featured.name,
+        icon: "water",
+      });
+    } else {
+      items.push({
+        id: "empty",
+        title: "Sin plantas aun",
+        subtitle: "Toca Identificar",
+        icon: "plus-circle-outline",
+      });
+    }
+
+    return items;
+  }, [plants]);
 
   return (
     <SafeAreaView style={styles.container}>
+      <TopBar title={greetingLabel} subtitle="Tu jardin de hoy" />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.greeting}>Buenas tardes, Francisco</Text>
-            <Text style={styles.brand}>Planty</Text>
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Ir al perfil"
-            onPress={() => router.push("/(app)/(tabs)/profile")}
-            style={({ pressed }) => [styles.headerBadge, pressed && styles.headerBadgePressed]}
-          >
-            {profilePhotoUri ? (
-              <Image source={{ uri: profilePhotoUri }} style={styles.headerAvatarImage} />
-            ) : (
-              <MaterialCommunityIcons name="account-circle" size={26} color={colors.primary} />
-            )}
-          </Pressable>
-        </View>
-
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Buscar plantas"

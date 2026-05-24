@@ -1,6 +1,8 @@
+import { useMemo } from "react";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useDemoData } from "@/src/data/DemoDataProvider";
 import {
   BorderRadius,
   Spacing,
@@ -9,37 +11,10 @@ import {
 } from "@/src/theme/designSystem";
 import { useAppTheme } from "@/src/theme/ThemeProvider";
 import ThemedButton from "@/src/components/ui/ThemedButton";
+import TopBar from "@/src/components/layout/TopBar";
 
-const reminders = [
-  { title: "Riego - Potos", time: "Hoy 6:00 PM", priority: "Alta" },
-  { title: "Fertilizar - Monstera", time: "Manana 8:00 AM", priority: "Media" },
-  { title: "Rotar maceta - Ficus", time: "Viernes 4:00 PM", priority: "Baja" },
-] as const;
-
-const diagnosisHistory = [
-  {
-    id: "dx-1",
-    planta: "Potos",
-    resultado: "Clorosis por riego irregular",
-    confianza: "91%",
-    fecha: "11 Mar",
-  },
-  {
-    id: "dx-2",
-    planta: "Hortensia",
-    resultado: "Posible oidio inicial",
-    confianza: "84%",
-    fecha: "09 Mar",
-  },
-  {
-    id: "dx-3",
-    planta: "Lirio de la paz",
-    resultado: "Sin enfermedad detectada",
-    confianza: "96%",
-    fecha: "06 Mar",
-  },
-] as const;
-
+// Catalogo educativo de enfermedades comunes. Es informacion general de jardineria,
+// no mock de datos del usuario.
 const commonDiseases = [
   {
     id: "dis-1",
@@ -61,13 +36,35 @@ const commonDiseases = [
   },
 ] as const;
 
+function getPriorityFromFrequency(label: string): "Alta" | "Media" | "Baja" {
+  const match = label.match(/(\d+)/);
+  if (!match) return "Media";
+  const days = parseInt(match[1], 10);
+  if (days <= 4) return "Alta";
+  if (days <= 8) return "Media";
+  return "Baja";
+}
+
 export default function CareTab() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
+  const { plants } = useDemoData();
   const styles = createStyles(colors, isDark);
+
+  const reminders = useMemo(
+    () =>
+      plants.slice(0, 4).map((plant) => ({
+        id: `rem-${plant.id}`,
+        title: `Riego - ${plant.name}`,
+        time: plant.wateringFrequencyLabel,
+        priority: getPriorityFromFrequency(plant.wateringFrequencyLabel),
+      })),
+    [plants],
+  );
 
   return (
     <SafeAreaView style={styles.container}>
+      <TopBar title="Cuidado" subtitle="Recordatorios y diagnostico" />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.headerCard}>
           <Text style={styles.title}>Centro de cuidado</Text>
@@ -96,35 +93,34 @@ export default function CareTab() {
 
         <View style={styles.listCard}>
           <Text style={styles.subtitle}>Recordatorios proximos</Text>
-          {reminders.map((item) => (
-            <View key={item.title} style={styles.reminderItem}>
-              <View style={styles.reminderTop}>
-                <Text style={styles.reminderTitle}>{item.title}</Text>
-                <View style={styles.priorityChip}>
-                  <Text style={styles.priorityText}>{item.priority}</Text>
-                </View>
-              </View>
-              <Text style={styles.reminderTime}>{item.time}</Text>
+          {reminders.length === 0 ? (
+            <View style={styles.emptyBlock}>
+              <Text style={styles.body}>
+                Agrega plantas a tu coleccion para generar recordatorios automaticos de riego.
+              </Text>
             </View>
-          ))}
+          ) : (
+            reminders.map((item) => (
+              <View key={item.id} style={styles.reminderItem}>
+                <View style={styles.reminderTop}>
+                  <Text style={styles.reminderTitle}>{item.title}</Text>
+                  <View style={styles.priorityChip}>
+                    <Text style={styles.priorityText}>{item.priority}</Text>
+                  </View>
+                </View>
+                <Text style={styles.reminderTime}>{item.time}</Text>
+              </View>
+            ))
+          )}
         </View>
 
         <View style={styles.listCard}>
           <Text style={styles.subtitle}>Historial de diagnosticos</Text>
-          {diagnosisHistory.map((item) => (
-            <Pressable key={item.id} style={styles.diagnosisRow}>
-              <View style={styles.diagnosisContent}>
-                <Text style={styles.diagnosisPlant}>{item.planta}</Text>
-                <Text style={styles.diagnosisResult}>{item.resultado}</Text>
-                <View style={styles.metaRow}>
-                  <Text style={styles.metaText}>{item.confianza}</Text>
-                  <Text style={styles.metaDot}>-</Text>
-                  <Text style={styles.metaText}>{item.fecha}</Text>
-                </View>
-              </View>
-              <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
-            </Pressable>
-          ))}
+          <View style={styles.emptyBlock}>
+            <Text style={styles.body}>
+              Aun no se ha guardado historial. Usa el diagnostico por camara para empezar a registrar tus revisiones.
+            </Text>
+          </View>
         </View>
 
         <View style={styles.listCard}>
@@ -268,6 +264,13 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontSize: Typography.caption.fontSize + 1,
       fontWeight: Typography.caption.fontWeight,
       lineHeight: Typography.caption.lineHeight,
+    },
+    emptyBlock: {
+      borderWidth: 1,
+      borderStyle: "dashed",
+      borderColor: colors.border,
+      borderRadius: BorderRadius.md,
+      padding: Spacing.md,
     },
     diagnosisRow: {
       borderWidth: 1,

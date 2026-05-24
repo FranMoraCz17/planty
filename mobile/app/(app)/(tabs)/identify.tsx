@@ -2,6 +2,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { CameraView } from "expo-camera";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
+import TopBar from "@/src/components/layout/TopBar";
 import {
   Alert,
   Image,
@@ -146,6 +147,7 @@ export default function IdentifyTab() {
   if (!isPermissionGranted) {
     return (
       <SafeAreaView style={styles.container}>
+        <TopBar title="Identificar" subtitle="Permiso requerido" />
         <ScrollView contentContainerStyle={[styles.content, styles.centered]}>
           <View style={styles.permissionCard}>
             <View style={styles.permissionIconWrap}>
@@ -194,6 +196,7 @@ export default function IdentifyTab() {
   if (screenState === "result" && result) {
     return (
       <SafeAreaView style={styles.container}>
+        <TopBar title="Resultado" subtitle="Identificacion completa" />
         <ScrollView
           contentContainerStyle={styles.resultContent}
           showsVerticalScrollIndicator={false}

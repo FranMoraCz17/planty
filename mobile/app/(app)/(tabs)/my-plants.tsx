@@ -11,6 +11,7 @@ import {
 } from "@/src/theme/designSystem";
 import { useAppTheme } from "@/src/theme/ThemeProvider";
 import ThemedButton from "@/src/components/ui/ThemedButton";
+import TopBar from "@/src/components/layout/TopBar";
 
 type PlantsTab = "plantas" | "recordatorios";
 
@@ -61,6 +62,7 @@ export default function MyPlantsTab() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <TopBar title="Mis plantas" subtitle="Tu coleccion" />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.headerCard}>
           <View style={styles.headerTop}>

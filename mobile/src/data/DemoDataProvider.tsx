@@ -46,6 +46,7 @@ interface DemoDataContextValue {
   ) => Promise<PlantDocument>;
   createPlant: (data: EditablePlantFields, options?: UpdateOptions) => Promise<PlantDocument>;
   deletePlant: (id: string, options?: UpdateOptions) => Promise<void>;
+  refreshCurrentUser: () => Promise<void>;
 }
 
 const DemoDataContext = createContext<DemoDataContextValue | undefined>(undefined);
@@ -276,6 +277,21 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const refreshCurrentUser = async () => {
+    if (!currentUserId) return;
+    try {
+      const refreshed = await getUserById(currentUserId);
+      if (refreshed) {
+        setUsers((prev) => {
+          const others = prev.filter((u) => u.id !== refreshed.id);
+          return [...others, refreshed];
+        });
+      }
+    } catch (error) {
+      console.error("Error refreshing current user:", error);
+    }
+  };
+
   if (!isReady) {
     return null;
   }
@@ -295,6 +311,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
         updatePlant,
         createPlant,
         deletePlant,
+        refreshCurrentUser,
       }}
     >
       {children}
