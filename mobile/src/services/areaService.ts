@@ -27,6 +27,8 @@ export interface AreaDocument {
   lightLevel: AreaLightLevel;
   humidityLevel: AreaHumidityLevel;
   indoor: boolean;
+  type: AreaType;
+  zone: string;
   createdAt: string;
 }
 
@@ -37,6 +39,16 @@ export type AreaLightLevel =
   | "sol-directo";
 
 export type AreaHumidityLevel = "baja" | "media" | "alta";
+
+export type AreaType =
+  | "casa"
+  | "patio"
+  | "finca"
+  | "invernadero"
+  | "balcon"
+  | "vivero"
+  | "huerto"
+  | "otro";
 
 export type CreateAreaInput = Omit<AreaDocument, "id" | "createdAt">;
 export type UpdateAreaInput = Partial<

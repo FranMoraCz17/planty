@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useDemoData } from "@/src/data/DemoDataProvider";
 import TopBar from "@/src/components/layout/TopBar";
+import SearchSheet from "@/src/components/layout/SearchSheet";
 import { useTodayContext } from "@/src/hooks/useTodayContext";
 import { usePlantPhoto } from "@/src/hooks/usePlantPhoto";
 import type { PlantDocument } from "@/src/services/plantService";
@@ -56,6 +57,7 @@ export default function HomeTab() {
   const { currentUser, plants } = useDemoData();
   const today = useTodayContext();
   const styles = createStyles(colors, isDark);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const firstName = getFirstName(currentUser?.name);
   const greetingLabel = firstName
@@ -87,7 +89,7 @@ export default function HomeTab() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Buscar especie"
-          onPress={() => router.push("/(app)/(tabs)/identify")}
+          onPress={() => setSearchOpen(true)}
           style={({ pressed }) => [
             styles.searchBar,
             pressed && styles.searchBarPressed,
@@ -100,6 +102,18 @@ export default function HomeTab() {
           />
           <Text style={styles.searchText}>Buscar especie o sintoma</Text>
         </Pressable>
+
+        <SearchSheet
+          visible={searchOpen}
+          onClose={() => setSearchOpen(false)}
+          onSelect={(item) => {
+            const q = new URLSearchParams({
+              sci: item.scientificName,
+              common: item.commonName,
+            }).toString();
+            router.push(`/(app)/species?${q}`);
+          }}
+        />
 
         {plants.length === 0 ? (
           <View style={styles.emptyWrap}>

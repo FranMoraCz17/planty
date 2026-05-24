@@ -36,7 +36,12 @@ type NoticeState = {
 
 export default function EditPlantFormScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string; mode?: string }>();
+  const params = useLocalSearchParams<{
+    id?: string;
+    mode?: string;
+    prefillCommon?: string;
+    prefillSci?: string;
+  }>();
   const { colors, isDark } = useAppTheme();
   const { currentUserId, getPlantById, getPlantsByUser, updatePlant, createPlant } = useDemoData();
   const styles = createStyles(colors, isDark);
@@ -61,8 +66,8 @@ export default function EditPlantFormScreen() {
   useEffect(() => {
     if (isCreateMode) {
       reset({
-        name: "",
-        scientificName: "",
+        name: params.prefillCommon ?? "",
+        scientificName: params.prefillSci ?? "",
         locationName: "",
         wateringFrequencyLabel: "",
       });
@@ -79,7 +84,7 @@ export default function EditPlantFormScreen() {
       locationName: plant.locationName,
       wateringFrequencyLabel: plant.wateringFrequencyLabel,
     });
-  }, [isCreateMode, plant, reset]);
+  }, [isCreateMode, plant, reset, params.prefillCommon, params.prefillSci]);
 
   const onSubmit = async (values: PlantFormValues) => {
     try {
