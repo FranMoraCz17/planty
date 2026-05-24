@@ -42,7 +42,7 @@ export default function IdentifyTab() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
   const styles = createStyles(colors, isDark);
-  const { createPlant } = useDemoData();
+  const { createPlant, areas } = useDemoData();
 
   const {
     cameraRef,
@@ -60,6 +60,7 @@ export default function IdentifyTab() {
   const [result, setResult] = useState<PlantIdentifyResult | null>(null);
   const [lastPhotoUri, setLastPhotoUri] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
 
   // Cuando la camara esta a pantalla completa Y con permiso, ocultamos la tab bar
   useHideTabBar(screenState === "camera" && isPermissionGranted);
@@ -97,12 +98,17 @@ export default function IdentifyTab() {
 
     setIsSaving(true);
     try {
+      const targetArea = selectedAreaId
+        ? areas.find((a) => a.id === selectedAreaId)
+        : null;
+
       await createPlant({
         name: result.commonName,
         scientificName: result.scientificName,
-        locationName: "Sin ubicación",
+        locationName: targetArea?.name ?? "Sin ubicación",
         wateringFrequencyLabel: result.wateringFrequency || "Cada 7 días",
         photoUri: lastPhotoUri ?? undefined,
+        areaId: selectedAreaId,
       });
       Alert.alert(
         "Planta guardada",
@@ -117,6 +123,7 @@ export default function IdentifyTab() {
       setScreenState("camera");
       setResult(null);
       setLastPhotoUri(null);
+      setSelectedAreaId(null);
     } catch (error) {
       const message =
         error instanceof Error
@@ -430,6 +437,111 @@ export default function IdentifyTab() {
                     <Text style={styles.funFactLabel}>Dato curioso</Text>
                   </View>
                   <Text style={styles.funFactText}>{result.funFact}</Text>
+                </View>
+              )}
+
+              {/* Selector de area destino */}
+              {result.isPlant && (
+                <View style={styles.areaSelectorWrap}>
+                  <Text style={styles.areaSelectorTitle}>
+                    Donde la vas a poner?
+                  </Text>
+
+                  {result.suggestedAreaType ? (
+                    <View style={styles.suggestionBanner}>
+                      <MaterialCommunityIcons
+                        name="lightbulb-on"
+                        size={16}
+                        color={colors.primary}
+                      />
+                      <Text style={styles.suggestionText}>
+                        La IA sugiere{" "}
+                        <Text style={styles.suggestionBold}>
+                          {result.suggestedAreaType.indoor ? "interior" : "exterior"}
+                        </Text>
+                        , {result.suggestedAreaType.lightLevel.replace("-", " ")},
+                        humedad {result.suggestedAreaType.humidityLevel}.
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  <View style={styles.areaOptionsRow}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Sin area especifica"
+                      onPress={() => setSelectedAreaId(null)}
+                      style={({ pressed }) => [
+                        styles.areaPill,
+                        selectedAreaId === null && styles.areaPillActive,
+                        pressed && styles.areaPillPressed,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.areaPillText,
+                          selectedAreaId === null && styles.areaPillTextActive,
+                        ]}
+                      >
+                        Sin area
+                      </Text>
+                    </Pressable>
+
+                    {areas.map((area) => {
+                      const isSuggested =
+                        result.suggestedAreaType &&
+                        area.indoor === result.suggestedAreaType.indoor &&
+                        area.lightLevel === result.suggestedAreaType.lightLevel;
+                      const isActive = selectedAreaId === area.id;
+                      return (
+                        <Pressable
+                          key={area.id}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Seleccionar area ${area.name}`}
+                          onPress={() => setSelectedAreaId(area.id)}
+                          style={({ pressed }) => [
+                            styles.areaPill,
+                            isActive && styles.areaPillActive,
+                            isSuggested && !isActive && styles.areaPillSuggested,
+                            pressed && styles.areaPillPressed,
+                          ]}
+                        >
+                          {isSuggested && !isActive ? (
+                            <MaterialCommunityIcons
+                              name="star"
+                              size={12}
+                              color={colors.primary}
+                            />
+                          ) : null}
+                          <Text
+                            style={[
+                              styles.areaPillText,
+                              isActive && styles.areaPillTextActive,
+                              isSuggested && !isActive && styles.areaPillTextSuggested,
+                            ]}
+                          >
+                            {area.name}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Crear nueva area"
+                      onPress={() => router.push("/(app)/forms/area")}
+                      style={({ pressed }) => [
+                        styles.areaPillCreate,
+                        pressed && styles.areaPillPressed,
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name="plus"
+                        size={14}
+                        color={colors.primary}
+                      />
+                      <Text style={styles.areaPillCreateText}>Nueva area</Text>
+                    </Pressable>
+                  </View>
                 </View>
               )}
 
@@ -1545,5 +1657,93 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontFamily: Typography.family,
       fontSize: 14,
       lineHeight: 21,
+    },
+    areaSelectorWrap: {
+      gap: Spacing.sm,
+      paddingTop: Spacing.md,
+    },
+    areaSelectorTitle: {
+      color: colors.text,
+      fontFamily: Typography.family,
+      fontSize: 16,
+      fontWeight: "800",
+    },
+    suggestionBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      backgroundColor: isDark ? "#1F3430" : "#E5F3EE",
+      borderRadius: BorderRadius.md,
+      padding: Spacing.sm,
+    },
+    suggestionText: {
+      flex: 1,
+      color: colors.text,
+      fontFamily: Typography.family,
+      fontSize: 13,
+      fontWeight: "500",
+      lineHeight: 18,
+    },
+    suggestionBold: {
+      fontWeight: "800",
+      color: colors.primary,
+    },
+    areaOptionsRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: Spacing.xs,
+    },
+    areaPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: 8,
+      borderRadius: BorderRadius.full,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surfaceCard,
+    },
+    areaPillActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    areaPillSuggested: {
+      borderColor: colors.primary,
+      borderWidth: 2,
+    },
+    areaPillPressed: {
+      opacity: 0.75,
+    },
+    areaPillText: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    areaPillTextActive: {
+      color: colors.onPrimary,
+      fontWeight: "800",
+    },
+    areaPillTextSuggested: {
+      color: colors.primary,
+      fontWeight: "700",
+    },
+    areaPillCreate: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: 8,
+      borderRadius: BorderRadius.full,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      borderStyle: "dashed",
+    },
+    areaPillCreateText: {
+      color: colors.primary,
+      fontFamily: Typography.family,
+      fontSize: 13,
+      fontWeight: "700",
     },
   });

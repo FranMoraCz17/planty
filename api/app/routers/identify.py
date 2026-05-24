@@ -40,6 +40,12 @@ Responde ÚNICAMENTE con un objeto JSON válido con esta estructura exacta. No i
     "Trasplantar cada dos años a una maceta ligeramente mayor"
   ],
   "common_pests": ["Cochinilla algodonosa", "Araña roja"],
+  "suggested_area_type": {
+    "indoor": true,
+    "light_level": "luz-indirecta",
+    "humidity_level": "media",
+    "reason": "Prefiere espacios interiores con luz filtrada y humedad media, lejos de corrientes de aire frío."
+  },
   "fun_fact": "Un dato curioso o interesante sobre la planta en una oración."
 }
 
@@ -50,6 +56,10 @@ Reglas estrictas para los campos:
 - "toxicity" debe ser exactamente uno de: "no tóxica", "leve", "tóxica".
 - "common_pests" puede ser lista vacía si no aplica.
 - "fun_fact" puede ser null si no hay dato relevante.
+- "suggested_area_type.light_level" debe ser uno de: "sombra", "luz-indirecta", "luz-brillante", "sol-directo".
+- "suggested_area_type.humidity_level" debe ser uno de: "baja", "media", "alta".
+- "suggested_area_type.indoor" es booleano (true = interior, false = exterior).
+- "suggested_area_type.reason" es una oración corta explicando la elección.
 
 Si la imagen NO es una planta o no se distingue claramente, responde:
 {
@@ -73,6 +83,7 @@ Si la imagen NO es una planta o no se distingue claramente, responde:
   "soil": "",
   "care_tips": [],
   "common_pests": [],
+  "suggested_area_type": null,
   "fun_fact": null
 }
 """.strip()
@@ -154,6 +165,16 @@ def identify_plant(body: PlantIdentifyRequest) -> dict:
         confidence_int = 0
     confidence_int = max(0, min(100, confidence_int))
 
+    suggested_area_raw = result.get("suggested_area_type")
+    suggested_area: dict | None = None
+    if isinstance(suggested_area_raw, dict):
+        suggested_area = {
+            "indoor": bool(suggested_area_raw.get("indoor", True)),
+            "light_level": str(suggested_area_raw.get("light_level", "luz-indirecta")),
+            "humidity_level": str(suggested_area_raw.get("humidity_level", "media")),
+            "reason": str(suggested_area_raw.get("reason", "")),
+        }
+
     return {
         "is_plant": bool(result.get("is_plant", False)),
         "common_name": str(result.get("common_name", "No identificado")),
@@ -175,5 +196,6 @@ def identify_plant(body: PlantIdentifyRequest) -> dict:
         "soil": str(result.get("soil", "")),
         "care_tips": list(result.get("care_tips", [])),
         "common_pests": list(result.get("common_pests", [])),
+        "suggested_area_type": suggested_area,
         "fun_fact": result.get("fun_fact") or None,
     }
