@@ -285,7 +285,7 @@ export default function MyPlantsTab() {
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Agregar planta"
-        onPress={() => router.push("/(app)/forms/plant?mode=create")}
+        onPress={() => router.push("/(app)/add-plant")}
         style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
       >
         <MaterialCommunityIcons name="plus" size={24} color={colors.onPrimary} />

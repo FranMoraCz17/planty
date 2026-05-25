@@ -24,7 +24,12 @@ export type EditableUserFields = Pick<UserDocument, "name" | "username" | "email
 export type EditablePlantFields = Pick<
   PlantDocument,
   "name" | "scientificName" | "locationName" | "wateringFrequencyLabel"
-> & { photoUri?: string; areaId?: string | null };
+> & {
+  photoUri?: string;
+  areaId?: string | null;
+  notes?: string;
+  acquiredAt?: string | null;
+};
 
 interface UpdateOptions {
   simulateFailure?: boolean;
@@ -269,6 +274,8 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
         createdAt: new Date().toISOString(),
         photoUri: data.photoUri,
         areaId: data.areaId ?? null,
+        notes: data.notes,
+        acquiredAt: data.acquiredAt ?? null,
       });
 
       const refreshedPlants = await getPlantsByUserFromFirestore(currentUserId);

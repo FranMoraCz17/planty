@@ -54,7 +54,14 @@ export type CreateAreaInput = Omit<AreaDocument, "id" | "createdAt">;
 export type UpdateAreaInput = Partial<
   Pick<
     AreaDocument,
-    "name" | "description" | "photoUri" | "lightLevel" | "humidityLevel" | "indoor"
+    | "name"
+    | "description"
+    | "photoUri"
+    | "lightLevel"
+    | "humidityLevel"
+    | "indoor"
+    | "type"
+    | "zone"
   >
 >;
 
@@ -66,6 +73,8 @@ interface FirestoreAreaDocument {
   lightLevel?: string;
   humidityLevel?: string;
   indoor?: boolean;
+  type?: string;
+  zone?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -93,6 +102,22 @@ function normalizeHumidity(value: string | undefined): AreaHumidityLevel {
   }
 }
 
+function normalizeType(value: string | undefined): AreaType {
+  switch (value) {
+    case "casa":
+    case "patio":
+    case "finca":
+    case "invernadero":
+    case "balcon":
+    case "vivero":
+    case "huerto":
+    case "otro":
+      return value;
+    default:
+      return "casa";
+  }
+}
+
 const mapDocument = (id: string, raw: FirestoreAreaDocument): AreaDocument => ({
   id,
   userId: raw.userId ?? "",
@@ -102,6 +127,8 @@ const mapDocument = (id: string, raw: FirestoreAreaDocument): AreaDocument => ({
   lightLevel: normalizeLight(raw.lightLevel),
   humidityLevel: normalizeHumidity(raw.humidityLevel),
   indoor: Boolean(raw.indoor ?? true),
+  type: normalizeType(raw.type),
+  zone: raw.zone?.trim() ?? "",
   createdAt: raw.createdAt ?? new Date().toISOString(),
 });
 
@@ -142,6 +169,8 @@ const AreaService = {
         lightLevel: input.lightLevel,
         humidityLevel: input.humidityLevel,
         indoor: input.indoor,
+        type: input.type,
+        zone: input.zone?.trim() ?? "",
         createdAt: new Date().toISOString(),
       };
       await setDoc(ref, payload);

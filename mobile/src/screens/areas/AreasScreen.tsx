@@ -14,6 +14,7 @@ import { useDemoData } from "@/src/data/DemoDataProvider";
 import type {
   AreaDocument,
   AreaLightLevel,
+  AreaType,
 } from "@/src/services/areaService";
 import {
   BorderRadius,
@@ -38,6 +39,28 @@ const LIGHT_ICON: Record<
   "luz-indirecta": "weather-partly-cloudy",
   "luz-brillante": "weather-sunny",
   "sol-directo": "white-balance-sunny",
+};
+
+const TYPE_LABEL: Record<AreaType, string> = {
+  casa: "Casa",
+  patio: "Patio",
+  finca: "Finca",
+  invernadero: "Invernadero",
+  balcon: "Balcón",
+  vivero: "Vivero",
+  huerto: "Huerto",
+  otro: "Otro",
+};
+
+const TYPE_ICON: Record<AreaType, keyof typeof MaterialCommunityIcons.glyphMap> = {
+  casa: "home",
+  patio: "tree-outline",
+  finca: "barn",
+  invernadero: "greenhouse",
+  balcon: "balcony",
+  vivero: "sprout",
+  huerto: "carrot",
+  otro: "dots-horizontal-circle-outline",
 };
 
 export default function AreasScreen() {
@@ -149,25 +172,47 @@ function AreaCard({
         ) : (
           <View style={styles.areaPhotoPlaceholder}>
             <MaterialCommunityIcons
-              name={area.indoor ? "home-outline" : "tree-outline"}
-              size={36}
+              name={TYPE_ICON[area.type]}
+              size={48}
               color={colors.onPrimary}
             />
           </View>
         )}
-        <View style={styles.areaBadge}>
+
+        {/* Overlay degradado para legibilidad */}
+        <View style={styles.areaPhotoOverlay} />
+
+        {/* Tipo arriba a la izquierda */}
+        <View style={styles.areaTypeBadge}>
           <MaterialCommunityIcons
-            name="leaf"
+            name={TYPE_ICON[area.type]}
             size={12}
             color="#FFFFFF"
           />
+          <Text style={styles.areaTypeBadgeText}>{TYPE_LABEL[area.type]}</Text>
+        </View>
+
+        {/* Cantidad arriba a la derecha */}
+        <View style={styles.areaBadge}>
+          <MaterialCommunityIcons name="leaf" size={12} color="#FFFFFF" />
           <Text style={styles.areaBadgeText}>
             {plantCount} {plantCount === 1 ? "planta" : "plantas"}
           </Text>
         </View>
+
+        {/* Nombre y zona abajo, sobre la foto */}
+        <View style={styles.areaTitleOverlay}>
+          <Text style={styles.areaNameOverlay} numberOfLines={1}>
+            {area.name}
+          </Text>
+          {area.zone ? (
+            <Text style={styles.areaZoneOverlay} numberOfLines={1}>
+              {area.zone}
+            </Text>
+          ) : null}
+        </View>
       </View>
       <View style={styles.areaBody}>
-        <Text style={styles.areaName}>{area.name}</Text>
         {area.description ? (
           <Text style={styles.areaDescription} numberOfLines={2}>
             {area.description}
@@ -299,11 +344,60 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       padding: Spacing.md,
       gap: Spacing.xs,
     },
-    areaName: {
-      color: colors.text,
+    areaPhotoOverlay: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: "60%",
+      backgroundColor: "rgba(0,0,0,0.65)",
+    },
+    areaTypeBadge: {
+      position: "absolute",
+      top: Spacing.sm,
+      left: Spacing.sm,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: "rgba(0,0,0,0.65)",
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 4,
+      borderRadius: BorderRadius.full,
+    },
+    areaTypeBadgeText: {
+      color: "#FFFFFF",
       fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize + 2,
+      fontSize: Typography.caption.fontSize,
       fontWeight: "800",
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+    },
+    areaTitleOverlay: {
+      position: "absolute",
+      left: Spacing.md,
+      right: Spacing.md,
+      bottom: Spacing.md,
+      gap: 2,
+    },
+    areaNameOverlay: {
+      color: "#FFFFFF",
+      fontFamily: Typography.family,
+      fontSize: Typography.body.fontSize + 6,
+      fontWeight: "800",
+      letterSpacing: -0.4,
+      textShadowColor: "rgba(0,0,0,0.6)",
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 4,
+    },
+    areaZoneOverlay: {
+      color: "#FFFFFF",
+      fontFamily: Typography.family,
+      fontSize: Typography.body.fontSize - 1,
+      fontWeight: "600",
+      opacity: 0.9,
+      textShadowColor: "rgba(0,0,0,0.6)",
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 3,
     },
     areaDescription: {
       color: colors.textSecondary,

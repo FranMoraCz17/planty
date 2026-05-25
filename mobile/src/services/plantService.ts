@@ -23,13 +23,20 @@ export interface PlantDocument {
   createdAt: string;
   photoUri?: string;
   areaId?: string | null;
+  notes?: string;
+  acquiredAt?: string | null;
 }
 
 export type CreatePlantInput = PlantDocument;
 export type UpdatePlantInput = Pick<
   PlantDocument,
   "name" | "scientificName" | "locationName" | "wateringFrequencyLabel"
-> & { photoUri?: string; areaId?: string | null };
+> & {
+  photoUri?: string;
+  areaId?: string | null;
+  notes?: string;
+  acquiredAt?: string | null;
+};
 
 interface FirestorePlantDocument {
   id?: string;
@@ -44,6 +51,8 @@ interface FirestorePlantDocument {
   updatedAt?: string;
   photoUri?: string;
   areaId?: string | null;
+  notes?: string;
+  acquiredAt?: string | null;
 }
 
 const mapPlantDocument = (id: string, raw: FirestorePlantDocument): PlantDocument => ({
@@ -56,6 +65,8 @@ const mapPlantDocument = (id: string, raw: FirestorePlantDocument): PlantDocumen
   createdAt: raw.createdAt ?? new Date().toISOString(),
   photoUri: raw.photoUri,
   areaId: raw.areaId ?? null,
+  notes: raw.notes ?? "",
+  acquiredAt: raw.acquiredAt ?? null,
 });
 
 export async function getPlantsByUser(
@@ -106,6 +117,10 @@ export async function createPlant(data: CreatePlantInput): Promise<string> {
       createdAt: data.createdAt || new Date().toISOString(),
       ...(data.photoUri ? { photoUri: data.photoUri } : {}),
       ...(data.areaId ? { areaId: data.areaId } : {}),
+      ...(data.notes !== undefined ? { notes: data.notes } : {}),
+      ...(data.acquiredAt !== undefined
+        ? { acquiredAt: data.acquiredAt }
+        : {}),
     });
 
     return plantRef.id;
@@ -142,6 +157,10 @@ export async function updatePlantById(
       updatedAt: new Date().toISOString(),
       ...(data.photoUri !== undefined ? { photoUri: data.photoUri } : {}),
       ...(data.areaId !== undefined ? { areaId: data.areaId } : {}),
+      ...(data.notes !== undefined ? { notes: data.notes } : {}),
+      ...(data.acquiredAt !== undefined
+        ? { acquiredAt: data.acquiredAt }
+        : {}),
     });
 
     const updatedPlant = await getPlantById(id);

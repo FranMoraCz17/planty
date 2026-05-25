@@ -20,6 +20,7 @@ import StorageService from "@/src/services/storageService";
 import {
   type AreaHumidityLevel,
   type AreaLightLevel,
+  type AreaType,
 } from "@/src/services/areaService";
 import { useDemoData } from "@/src/data/DemoDataProvider";
 import {
@@ -41,6 +42,32 @@ const HUMIDITY_OPTIONS: { value: AreaHumidityLevel; label: string }[] = [
   { value: "baja", label: "Baja" },
   { value: "media", label: "Media" },
   { value: "alta", label: "Alta" },
+];
+
+const TYPE_OPTIONS: {
+  value: AreaType;
+  label: string;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  defaultIndoor: boolean;
+}[] = [
+  { value: "casa", label: "Casa", icon: "home", defaultIndoor: true },
+  { value: "patio", label: "Patio", icon: "tree-outline", defaultIndoor: false },
+  { value: "finca", label: "Finca", icon: "barn", defaultIndoor: false },
+  {
+    value: "invernadero",
+    label: "Invernadero",
+    icon: "greenhouse",
+    defaultIndoor: true,
+  },
+  { value: "balcon", label: "Balcón", icon: "balcony", defaultIndoor: false },
+  { value: "vivero", label: "Vivero", icon: "sprout", defaultIndoor: false },
+  { value: "huerto", label: "Huerto", icon: "carrot", defaultIndoor: false },
+  {
+    value: "otro",
+    label: "Otro",
+    icon: "dots-horizontal-circle-outline",
+    defaultIndoor: true,
+  },
 ];
 
 const MAX_DIMENSION = 1024;
@@ -106,6 +133,8 @@ export default function AreaFormScreen() {
 
   const [name, setName] = useState(existing?.name ?? "");
   const [description, setDescription] = useState(existing?.description ?? "");
+  const [type, setType] = useState<AreaType>(existing?.type ?? "casa");
+  const [zone, setZone] = useState(existing?.zone ?? "");
   const [lightLevel, setLightLevel] = useState<AreaLightLevel>(
     existing?.lightLevel ?? "luz-indirecta",
   );
@@ -125,6 +154,8 @@ export default function AreaFormScreen() {
     if (existing) {
       setName(existing.name);
       setDescription(existing.description);
+      setType(existing.type);
+      setZone(existing.zone);
       setLightLevel(existing.lightLevel);
       setHumidityLevel(existing.humidityLevel);
       setIndoor(existing.indoor);
@@ -186,6 +217,8 @@ export default function AreaFormScreen() {
         await updateArea(editingId, {
           name: name.trim(),
           description: description.trim(),
+          type,
+          zone: zone.trim(),
           lightLevel,
           humidityLevel,
           indoor,
@@ -197,6 +230,8 @@ export default function AreaFormScreen() {
           userId: currentUserId,
           name: name.trim(),
           description: description.trim(),
+          type,
+          zone: zone.trim(),
           lightLevel,
           humidityLevel,
           indoor,
@@ -320,6 +355,62 @@ export default function AreaFormScreen() {
             placeholderTextColor={colors.disabled}
             multiline
             style={[styles.input, styles.inputMultiline]}
+          />
+        </View>
+
+        {/* Tipo de area */}
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>Tipo de espacio</Text>
+          <View style={styles.optionsGrid}>
+            {TYPE_OPTIONS.map((option) => {
+              const active = type === option.value;
+              return (
+                <Pressable
+                  key={option.value}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Tipo ${option.label}`}
+                  onPress={() => {
+                    setType(option.value);
+                    // Sugerir indoor segun tipo (el usuario puede cambiarlo)
+                    setIndoor(option.defaultIndoor);
+                  }}
+                  style={({ pressed }) => [
+                    styles.optionPill,
+                    active && styles.optionPillActive,
+                    pressed && styles.optionPillPressed,
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name={option.icon}
+                    size={16}
+                    color={active ? colors.onPrimary : colors.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.optionPillText,
+                      active && styles.optionPillTextActive,
+                    ]}
+                  >
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Zona */}
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>Zona (opcional)</Text>
+          <Text style={styles.fieldHint}>
+            Ejemplo: Sala, Cocina, Lote A, Parcela 1, Invernadero norte.
+          </Text>
+          <TextInput
+            value={zone}
+            onChangeText={setZone}
+            placeholder="Lote, sala, parcela..."
+            placeholderTextColor={colors.disabled}
+            style={styles.input}
           />
         </View>
 
