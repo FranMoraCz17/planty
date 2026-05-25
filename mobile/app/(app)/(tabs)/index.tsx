@@ -1,6 +1,8 @@
+import { useMemo, useState } from "react";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
+  ActivityIndicator,
   Image,
   Pressable,
   SafeAreaView,
@@ -9,6 +11,12 @@ import {
   Text,
   View,
 } from "react-native";
+import { useDemoData } from "@/src/data/DemoDataProvider";
+import TopBar from "@/src/components/layout/TopBar";
+import SearchSheet from "@/src/components/layout/SearchSheet";
+import { useTodayContext } from "@/src/hooks/useTodayContext";
+import { usePlantPhoto } from "@/src/hooks/usePlantPhoto";
+import type { PlantDocument } from "@/src/services/plantService";
 import {
   BorderRadius,
   Spacing,
@@ -17,138 +25,454 @@ import {
 } from "@/src/theme/designSystem";
 import { useAppTheme } from "@/src/theme/ThemeProvider";
 
-const tools = [
-  {
-    key: "diagnostico",
-    title: "Diagnosticar",
-    subtitle: "Verifica salud",
-    icon: "heart-pulse",
-    route: "/(app)/(tabs)/care",
-  },
-  {
-    key: "identificar",
-    title: "Identificar",
-    subtitle: "Reconoce especie",
-    icon: "camera",
-    route: "/(app)/(tabs)/identify",
-  },
-  {
-    key: "coleccion",
-    title: "Mi coleccion",
-    subtitle: "Estado por planta",
-    icon: "sprout",
-    route: "/(app)/(tabs)/my-plants",
-  },
-  {
-    key: "recordatorios",
-    title: "Recordatorios",
-    subtitle: "Agenda de riego",
-    icon: "calendar-check",
-    route: "/(app)/(tabs)/care",
-  },
-] as const;
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Buenos dias";
+  if (hour < 19) return "Buenas tardes";
+  return "Buenas noches";
+}
 
-const highlights = [
-  { id: "h1", title: "Luz filtrada", subtitle: "Sala norte", icon: "white-balance-sunny" },
-  { id: "h2", title: "Riego en 2 dias", subtitle: "Monstera", icon: "water" },
-  { id: "h3", title: "Nueva hoja", subtitle: "Pothos", icon: "leaf" },
-] as const;
+function getFirstName(fullName: string | undefined): string {
+  if (!fullName) return "";
+  return fullName.trim().split(/\s+/)[0];
+}
 
-const profilePhotoUri: string | null = null;
+function parseFrequencyDays(label: string | undefined): number | null {
+  if (!label) return null;
+  const match = label.match(/(\d+)/);
+  if (!match) return null;
+  const days = parseInt(match[1], 10);
+  return Number.isFinite(days) && days > 0 ? days : null;
+}
+
+interface UpcomingTask {
+  plant: PlantDocument;
+  daysAway: number;
+  cycle: number;
+}
 
 export default function HomeTab() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
+  const { currentUser, plants } = useDemoData();
+  const today = useTodayContext();
   const styles = createStyles(colors, isDark);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  const firstName = getFirstName(currentUser?.name);
+  const greetingLabel = firstName
+    ? `${getGreeting()}, ${firstName}`
+    : getGreeting();
+
+  const upcomingTasks = useMemo<UpcomingTask[]>(() => {
+    const items: UpcomingTask[] = [];
+    plants.forEach((plant) => {
+      const cycle = parseFrequencyDays(plant.wateringFrequencyLabel);
+      if (!cycle) return;
+      items.push({ plant, daysAway: cycle, cycle });
+    });
+    return items.sort((a, b) => a.daysAway - b.daysAway);
+  }, [plants]);
+
+  const heroTask = upcomingTasks[0] ?? null;
+  const nextDays = upcomingTasks[0]?.daysAway ?? null;
+  const restTasks = upcomingTasks.slice(1, 4);
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.greeting}>Buenas tardes, Francisco</Text>
-            <Text style={styles.brand}>Planty</Text>
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Ir al perfil"
-            onPress={() => router.push("/(app)/(tabs)/profile")}
-            style={({ pressed }) => [styles.headerBadge, pressed && styles.headerBadgePressed]}
-          >
-            {profilePhotoUri ? (
-              <Image source={{ uri: profilePhotoUri }} style={styles.headerAvatarImage} />
-            ) : (
-              <MaterialCommunityIcons name="account-circle" size={26} color={colors.primary} />
-            )}
-          </Pressable>
-        </View>
-
+      <TopBar title={greetingLabel} subtitle="Tu jardin de hoy" />
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ============== BLOQUE 1: BUSCADOR + HERO ============== */}
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Buscar plantas"
-          onPress={() => router.push("/(app)/(tabs)/identify")}
-          style={({ pressed }) => [styles.searchBar, pressed && styles.searchBarPressed]}
+          accessibilityLabel="Buscar especie"
+          onPress={() => setSearchOpen(true)}
+          style={({ pressed }) => [
+            styles.searchBar,
+            pressed && styles.searchBarPressed,
+          ]}
         >
-          <MaterialCommunityIcons name="magnify" size={20} color={colors.textSecondary} />
-          <Text style={styles.searchText}>Buscar por especie, sintoma o foto</Text>
+          <MaterialCommunityIcons
+            name="magnify"
+            size={20}
+            color={colors.textSecondary}
+          />
+          <Text style={styles.searchText}>Buscar especie o sintoma</Text>
         </Pressable>
 
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Herramientas de cuidado</Text>
-        </View>
+        <SearchSheet
+          visible={searchOpen}
+          onClose={() => setSearchOpen(false)}
+          onSelect={(item) => {
+            const q = new URLSearchParams({
+              sci: item.scientificName,
+              common: item.commonName,
+            }).toString();
+            router.push(`/(app)/species?${q}`);
+          }}
+        />
 
-        <View style={styles.toolsGrid}>
-          {tools.map((tool) => (
-            <Pressable
-              key={tool.key}
-              accessibilityRole="button"
-              accessibilityLabel={`Abrir ${tool.title}`}
-              onPress={() => router.push(tool.route)}
-              style={({ pressed }) => [
-                styles.toolCard,
-                tool.key === "identificar" && styles.toolCardHighlight,
-                pressed && styles.toolCardPressed,
-              ]}
-            >
-              <View style={[styles.toolIconWrap, tool.key === "identificar" && styles.toolIconWrapHighlight]}>
-                <MaterialCommunityIcons
-                  name={tool.icon}
-                  size={20}
-                  color={tool.key === "identificar" ? colors.accentWarm : colors.primary}
-                />
+        {plants.length === 0 ? (
+          <View style={styles.emptyWrap}>
+            <MaterialCommunityIcons
+              name="sprout-outline"
+              size={56}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.emptyText}>
+              Aun no tienes plantas. Identifica una para empezar.
+            </Text>
+          </View>
+        ) : (
+          <>
+            {heroTask ? (
+              <HeroTaskCard
+                task={heroTask}
+                colors={colors}
+                isDark={isDark}
+                onPress={() => router.push("/(app)/(tabs)/calendar")}
+              />
+            ) : null}
+
+            {/* ============== BLOQUE 2: COLECCION ============== */}
+            <SectionDivider />
+
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>Tu coleccion</Text>
+                <Text style={styles.sectionSubtitle}>
+                  {plants.length}{" "}
+                  {plants.length === 1 ? "planta activa" : "plantas activas"}
+                </Text>
               </View>
-              <Text style={styles.toolTitle}>{tool.title}</Text>
-              <Text style={styles.toolSubtitle}>{tool.subtitle}</Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Pulso del jardin</Text>
-        </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.highlightsRow}>
-          {highlights.map((item, index) => (
-            <View key={item.id} style={styles.highlightCard}>
-              <View
-                style={[
-                  styles.highlightIcon,
-                  index === 0 && { backgroundColor: colors.accentCool },
-                  index === 1 && { backgroundColor: colors.accentWarm },
-                  index === 2 && { backgroundColor: colors.accentLavender },
-                ]}
+              <Pressable
+                onPress={() => router.push("/(app)/(tabs)/my-plants")}
+                accessibilityLabel="Ver todas las plantas"
+                accessibilityRole="button"
+                hitSlop={8}
               >
-                <MaterialCommunityIcons name={item.icon} size={18} color={colors.onPrimary} />
-              </View>
-              <Text style={styles.highlightTitle}>{item.title}</Text>
-              <Text style={styles.highlightSubtitle}>{item.subtitle}</Text>
+                <Text style={styles.sectionLink}>Ver todas</Text>
+              </Pressable>
             </View>
-          ))}
-        </ScrollView>
+
+            <View style={styles.statsRow}>
+              <StatChip
+                icon="water"
+                value={nextDays === null ? "-" : `${nextDays}d`}
+                label="Proximo riego"
+                colors={colors}
+                isDark={isDark}
+              />
+              <StatChip
+                icon="map-marker-radius-outline"
+                value={`${new Set(plants.map((p) => p.locationName)).size}`}
+                label="Sitios"
+                colors={colors}
+                isDark={isDark}
+              />
+              <StatChip
+                icon="calendar-month-outline"
+                value={`${upcomingTasks.length}`}
+                label="Tareas"
+                colors={colors}
+                isDark={isDark}
+              />
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.carouselRow}
+            >
+              {plants.map((plant) => (
+                <PlantThumbCard
+                  key={plant.id}
+                  plant={plant}
+                  colors={colors}
+                  isDark={isDark}
+                  onPress={() =>
+                    router.push(`/(app)/forms/plant?id=${plant.id}`)
+                  }
+                />
+              ))}
+            </ScrollView>
+
+            {/* ============== BLOQUE 3: PROXIMAS TAREAS ============== */}
+            {restTasks.length > 0 ? (
+              <>
+                <SectionDivider />
+                <View style={styles.sectionHeader}>
+                  <View>
+                    <Text style={styles.sectionTitle}>Proximas tareas</Text>
+                    <Text style={styles.sectionSubtitle}>
+                      Despues de la mas urgente
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.taskList}>
+                  {restTasks.map((task) => (
+                    <Pressable
+                      key={task.plant.id}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Tarea de ${task.plant.name}`}
+                      onPress={() => router.push("/(app)/(tabs)/calendar")}
+                      style={({ pressed }) => [
+                        styles.taskRow,
+                        pressed && styles.taskRowPressed,
+                      ]}
+                    >
+                      <View style={styles.taskIcon}>
+                        <MaterialCommunityIcons
+                          name="water"
+                          size={16}
+                          color={colors.onPrimary}
+                        />
+                      </View>
+                      <View style={styles.taskBody}>
+                        <Text style={styles.taskTitle} numberOfLines={1}>
+                          Regar {task.plant.name}
+                        </Text>
+                        <Text style={styles.taskSubtitle}>
+                          En {task.daysAway}{" "}
+                          {task.daysAway === 1 ? "dia" : "dias"}
+                        </Text>
+                      </View>
+                      <MaterialCommunityIcons
+                        name="chevron-right"
+                        size={16}
+                        color={colors.textSecondary}
+                      />
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            ) : null}
+          </>
+        )}
+
+        {/* ============== BLOQUE 4: HOY EN EL JARDIN ============== */}
+        <SectionDivider />
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Hoy en el jardin</Text>
+            <Text style={styles.sectionSubtitle}>
+              {today.weather?.city ?? "Tu ubicacion"}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.contextCard}>
+          <View style={styles.contextBody}>
+            <View style={styles.contextBlock}>
+              <Text style={styles.contextEmoji}>{today.moon.emoji}</Text>
+              <Text style={styles.contextBlockLabel}>{today.moon.label}</Text>
+              <Text style={styles.contextBlockMeta}>
+                {today.moon.illumination}% iluminada
+              </Text>
+            </View>
+
+            <View style={styles.contextDivider} />
+
+            <View style={styles.contextBlock}>
+              {today.isLoadingWeather ? (
+                <ActivityIndicator color={colors.primary} />
+              ) : today.weather ? (
+                <>
+                  <Text style={styles.contextEmoji}>
+                    {today.weather.conditionEmoji}
+                  </Text>
+                  <Text style={styles.contextBlockLabel}>
+                    {today.weather.temperatureC}°C
+                  </Text>
+                  <Text style={styles.contextBlockMeta}>
+                    {today.weather.humidity}% humedad
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.contextEmoji}>🌡️</Text>
+                  <Text style={styles.contextBlockLabel}>Sin clima</Text>
+                  <Text style={styles.contextBlockMeta}>
+                    Activa ubicacion
+                  </Text>
+                </>
+              )}
+            </View>
+          </View>
+
+          <View style={styles.contextAdviceWrap}>
+            <MaterialCommunityIcons
+              name="lightbulb-outline"
+              size={16}
+              color={colors.primary}
+            />
+            <Text style={styles.contextAdvice}>{today.moon.gardenAdvice}</Text>
+          </View>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+// ============================================================
+// SUB-COMPONENTES
+// ============================================================
+
+function SectionDivider() {
+  return <View style={{ height: Spacing.md }} />;
+}
+
+function HeroTaskCard({
+  task,
+  colors,
+  isDark,
+  onPress,
+}: {
+  task: UpcomingTask;
+  colors: ThemeColors;
+  isDark: boolean;
+  onPress: () => void;
+}) {
+  const styles = createStyles(colors, isDark);
+  const { photoUri } = usePlantPhoto({
+    scientificName: task.plant.scientificName,
+  });
+
+  const urgencyLabel =
+    task.daysAway === 0
+      ? "Hoy"
+      : task.daysAway === 1
+        ? "Manana"
+        : `En ${task.daysAway} dias`;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Tarea destacada: ${task.plant.name} ${urgencyLabel}`}
+      onPress={onPress}
+      style={({ pressed }) => [styles.heroCard, pressed && styles.heroPressed]}
+    >
+      <View style={styles.heroPhotoWrap}>
+        {photoUri ? (
+          <Image
+            source={{ uri: photoUri }}
+            style={styles.heroPhoto}
+            accessibilityIgnoresInvertColors
+          />
+        ) : (
+          <MaterialCommunityIcons
+            name="leaf"
+            size={44}
+            color={colors.onPrimary}
+          />
+        )}
+        <View style={styles.heroBadge}>
+          <Text style={styles.heroBadgeText}>{urgencyLabel}</Text>
+        </View>
+      </View>
+      <View style={styles.heroBody}>
+        <Text style={styles.heroOverline}>Proxima tarea</Text>
+        <Text style={styles.heroTitle}>Regar {task.plant.name}</Text>
+        <Text style={styles.heroSubtitle}>
+          {task.plant.scientificName} - cada {task.cycle} dias
+        </Text>
+        <View style={styles.heroCta}>
+          <Text style={styles.heroCtaText}>Ver calendario</Text>
+          <MaterialCommunityIcons
+            name="arrow-right"
+            size={14}
+            color={colors.primary}
+          />
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+function StatChip({
+  icon,
+  value,
+  label,
+  colors,
+  isDark,
+}: {
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  value: string;
+  label: string;
+  colors: ThemeColors;
+  isDark: boolean;
+}) {
+  const styles = createStyles(colors, isDark);
+  return (
+    <View style={styles.statChip}>
+      <View style={styles.statChipIcon}>
+        <MaterialCommunityIcons name={icon} size={14} color={colors.primary} />
+      </View>
+      <View style={styles.statChipText}>
+        <Text style={styles.statChipValue}>{value}</Text>
+        <Text style={styles.statChipLabel}>{label}</Text>
+      </View>
+    </View>
+  );
+}
+
+function PlantThumbCard({
+  plant,
+  colors,
+  isDark,
+  onPress,
+}: {
+  plant: PlantDocument;
+  colors: ThemeColors;
+  isDark: boolean;
+  onPress: () => void;
+}) {
+  const styles = createStyles(colors, isDark);
+  const { photoUri } = usePlantPhoto({
+    scientificName: plant.scientificName,
+  });
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Ver ${plant.name}`}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.thumbCard,
+        pressed && styles.thumbCardPressed,
+      ]}
+    >
+      <View style={styles.thumbImageWrap}>
+        {photoUri ? (
+          <Image
+            source={{ uri: photoUri }}
+            style={styles.thumbImage}
+            accessibilityIgnoresInvertColors
+          />
+        ) : (
+          <MaterialCommunityIcons
+            name="leaf"
+            size={28}
+            color={colors.onPrimary}
+          />
+        )}
+      </View>
+      <Text style={styles.thumbName} numberOfLines={1}>
+        {plant.name}
+      </Text>
+      <Text style={styles.thumbLocation} numberOfLines={1}>
+        {plant.locationName}
+      </Text>
+    </Pressable>
+  );
+}
+
+// ============================================================
+// ESTILOS
+// ============================================================
 
 const createStyles = (colors: ThemeColors, isDark: boolean) =>
   StyleSheet.create({
@@ -157,52 +481,13 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       backgroundColor: colors.surface,
     },
     content: {
-      padding: Spacing.lg,
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.sm,
+      paddingBottom: 130,
       gap: Spacing.md,
-      paddingBottom: Spacing.xxl,
-    },
-    headerRow: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-    },
-    greeting: {
-      color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize + 4,
-      fontWeight: "700",
-      lineHeight: Typography.title.lineHeight,
-    },
-    brand: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
-      fontWeight: "700",
-      lineHeight: Typography.caption.lineHeight,
-      textTransform: "uppercase",
-      letterSpacing: 1,
-      marginTop: 2,
-    },
-    headerBadge: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      backgroundColor: colors.surfaceCard,
-      borderWidth: 1,
-      borderColor: colors.border,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    headerBadgePressed: {
-      backgroundColor: isDark ? "#22332F" : "#EAF4F0",
-    },
-    headerAvatarImage: {
-      width: "100%",
-      height: "100%",
-      borderRadius: 22,
     },
     searchBar: {
-      minHeight: 50,
+      minHeight: 48,
       borderRadius: BorderRadius.full,
       backgroundColor: colors.surfaceCard,
       borderWidth: 1,
@@ -219,100 +504,322 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       color: colors.textSecondary,
       fontFamily: Typography.family,
       fontSize: Typography.body.fontSize - 1,
-      fontWeight: Typography.body.fontWeight,
-      lineHeight: Typography.body.lineHeight,
+      fontWeight: "500",
     },
-    sectionHeader: {
-      marginTop: Spacing.sm,
-    },
-    sectionTitle: {
-      color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize + 3,
-      fontWeight: "700",
-      lineHeight: Typography.body.lineHeight,
-    },
-    toolsGrid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
+    emptyWrap: {
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: Spacing.xxl,
       gap: Spacing.sm,
     },
-    toolCard: {
-      width: "48.5%",
+    emptyText: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: Typography.body.fontSize,
+      textAlign: "center",
+      maxWidth: 260,
+    },
+
+    // Hero
+    heroCard: {
+      flexDirection: "row",
+      gap: Spacing.md,
       backgroundColor: colors.surfaceCard,
       borderRadius: BorderRadius.lg,
       borderWidth: 1,
       borderColor: colors.border,
       padding: Spacing.md,
-      gap: Spacing.xs,
-      minHeight: 132,
     },
-    toolCardHighlight: {
-      borderColor: colors.accentWarm,
-      backgroundColor: isDark ? "#2B2A1D" : "#FFF6E8",
+    heroPressed: {
+      opacity: 0.9,
     },
-    toolCardPressed: {
-      opacity: 0.85,
-    },
-    toolIconWrap: {
-      width: 34,
-      height: 34,
-      borderRadius: 17,
-      backgroundColor: isDark ? "#1F3430" : "#E5F3EE",
+    heroPhotoWrap: {
+      width: 110,
+      height: 110,
+      borderRadius: BorderRadius.lg,
+      backgroundColor: colors.primary,
       alignItems: "center",
       justifyContent: "center",
-      marginBottom: Spacing.xs,
+      overflow: "hidden",
+      position: "relative",
     },
-    toolIconWrapHighlight: {
-      backgroundColor: isDark ? "#3A3322" : "#FFE5B8",
+    heroPhoto: {
+      width: "100%",
+      height: "100%",
     },
-    toolTitle: {
+    heroBadge: {
+      position: "absolute",
+      top: 6,
+      left: 6,
+      backgroundColor: "rgba(0,0,0,0.7)",
+      borderRadius: BorderRadius.full,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 3,
+    },
+    heroBadgeText: {
+      color: "#FFFFFF",
+      fontFamily: Typography.family,
+      fontSize: Typography.caption.fontSize,
+      fontWeight: "800",
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+    },
+    heroBody: {
+      flex: 1,
+      justifyContent: "center",
+      gap: 4,
+    },
+    heroOverline: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: Typography.caption.fontSize - 1,
+      fontWeight: "700",
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
+    },
+    heroTitle: {
       color: colors.text,
       fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize,
-      fontWeight: "700",
-      lineHeight: Typography.body.lineHeight,
+      fontSize: Typography.body.fontSize + 4,
+      fontWeight: "800",
+      lineHeight: Typography.body.lineHeight + 4,
     },
-    toolSubtitle: {
+    heroSubtitle: {
       color: colors.textSecondary,
       fontFamily: Typography.family,
       fontSize: Typography.caption.fontSize + 1,
-      fontWeight: Typography.caption.fontWeight,
-      lineHeight: Typography.body.lineHeight,
+      fontWeight: "500",
     },
-    highlightsRow: {
+    heroCta: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      marginTop: 4,
+    },
+    heroCtaText: {
+      color: colors.primary,
+      fontFamily: Typography.family,
+      fontSize: Typography.caption.fontSize + 1,
+      fontWeight: "700",
+    },
+
+    // Headers de seccion
+    sectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    sectionTitle: {
+      color: colors.text,
+      fontFamily: Typography.family,
+      fontSize: Typography.body.fontSize + 4,
+      fontWeight: "800",
+      letterSpacing: -0.3,
+    },
+    sectionSubtitle: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: Typography.caption.fontSize,
+      fontWeight: "500",
+      marginTop: 2,
+    },
+    sectionLink: {
+      color: colors.primary,
+      fontFamily: Typography.family,
+      fontSize: Typography.caption.fontSize + 1,
+      fontWeight: "700",
+    },
+
+    // Stats chips
+    statsRow: {
+      flexDirection: "row",
       gap: Spacing.sm,
-      paddingRight: Spacing.sm,
     },
-    highlightCard: {
-      width: 126,
+    statChip: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.xs,
       backgroundColor: colors.surfaceCard,
       borderRadius: BorderRadius.md,
       borderWidth: 1,
       borderColor: colors.border,
-      padding: Spacing.md,
-      gap: Spacing.xs,
+      paddingVertical: Spacing.sm,
+      paddingHorizontal: Spacing.sm,
     },
-    highlightIcon: {
-      width: 30,
-      height: 30,
-      borderRadius: 15,
+    statChipIcon: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      backgroundColor: isDark ? "#1F3430" : "#E5F3EE",
       alignItems: "center",
       justifyContent: "center",
-      marginBottom: Spacing.xs,
     },
-    highlightTitle: {
+    statChipText: {
+      flex: 1,
+      gap: 0,
+    },
+    statChipValue: {
       color: colors.text,
       fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
-      fontWeight: "700",
-      lineHeight: Typography.caption.lineHeight,
+      fontSize: Typography.body.fontSize,
+      fontWeight: "800",
+      lineHeight: Typography.body.lineHeight,
     },
-    highlightSubtitle: {
+    statChipLabel: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: Typography.caption.fontSize - 1,
+      fontWeight: "600",
+    },
+
+    // Carrusel
+    carouselRow: {
+      gap: Spacing.sm,
+      paddingRight: Spacing.md,
+      paddingVertical: 4,
+    },
+    thumbCard: {
+      width: 130,
+      backgroundColor: colors.surfaceCard,
+      borderRadius: BorderRadius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: Spacing.sm,
+      gap: 4,
+    },
+    thumbCardPressed: {
+      opacity: 0.8,
+    },
+    thumbImageWrap: {
+      width: "100%",
+      aspectRatio: 1,
+      borderRadius: BorderRadius.md,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+      overflow: "hidden",
+      marginBottom: 4,
+    },
+    thumbImage: {
+      width: "100%",
+      height: "100%",
+    },
+    thumbName: {
+      color: colors.text,
+      fontFamily: Typography.family,
+      fontSize: Typography.body.fontSize - 1,
+      fontWeight: "700",
+    },
+    thumbLocation: {
       color: colors.textSecondary,
       fontFamily: Typography.family,
       fontSize: Typography.caption.fontSize,
-      fontWeight: Typography.caption.fontWeight,
-      lineHeight: Typography.caption.lineHeight,
+      fontWeight: "500",
+    },
+
+    // Lista de tareas
+    taskList: {
+      gap: Spacing.xs,
+    },
+    taskRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      backgroundColor: colors.surfaceCard,
+      borderRadius: BorderRadius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: Spacing.sm,
+      paddingHorizontal: Spacing.sm,
+    },
+    taskRowPressed: {
+      opacity: 0.8,
+    },
+    taskIcon: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    taskBody: {
+      flex: 1,
+      gap: 1,
+    },
+    taskTitle: {
+      color: colors.text,
+      fontFamily: Typography.family,
+      fontSize: Typography.body.fontSize - 1,
+      fontWeight: "700",
+    },
+    taskSubtitle: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: Typography.caption.fontSize,
+      fontWeight: "500",
+    },
+
+    // Context card (luna + clima)
+    contextCard: {
+      backgroundColor: colors.surfaceCard,
+      borderRadius: BorderRadius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: Spacing.md,
+      paddingHorizontal: Spacing.md,
+      gap: Spacing.sm,
+    },
+    contextBody: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      paddingVertical: Spacing.sm,
+    },
+    contextBlock: {
+      flex: 1,
+      alignItems: "center",
+      gap: 2,
+    },
+    contextDivider: {
+      width: 1,
+      height: 64,
+      backgroundColor: colors.border,
+    },
+    contextEmoji: {
+      fontSize: 34,
+      marginBottom: 4,
+    },
+    contextBlockLabel: {
+      color: colors.text,
+      fontFamily: Typography.family,
+      fontSize: Typography.body.fontSize + 1,
+      fontWeight: "800",
+      textAlign: "center",
+    },
+    contextBlockMeta: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: Typography.caption.fontSize,
+      fontWeight: "500",
+      textAlign: "center",
+    },
+    contextAdviceWrap: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: Spacing.sm,
+      paddingTop: Spacing.sm,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    contextAdvice: {
+      flex: 1,
+      color: colors.text,
+      fontFamily: Typography.family,
+      fontSize: Typography.body.fontSize - 1,
+      fontWeight: "500",
+      lineHeight: Typography.body.lineHeight,
+      fontStyle: "italic",
     },
   });

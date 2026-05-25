@@ -2,6 +2,8 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { CameraView } from "expo-camera";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
+import TopBar from "@/src/components/layout/TopBar";
+import { useHideTabBar } from "@/src/hooks/useHideTabBar";
 import {
   Alert,
   Image,
@@ -40,7 +42,7 @@ export default function IdentifyTab() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
   const styles = createStyles(colors, isDark);
-  const { createPlant } = useDemoData();
+  const { createPlant, areas } = useDemoData();
 
   const {
     cameraRef,
@@ -58,6 +60,10 @@ export default function IdentifyTab() {
   const [result, setResult] = useState<PlantIdentifyResult | null>(null);
   const [lastPhotoUri, setLastPhotoUri] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
+
+  // Cuando la camara esta a pantalla completa Y con permiso, ocultamos la tab bar
+  useHideTabBar(screenState === "camera" && isPermissionGranted);
 
   const flashIcon: IconName =
     flashMode === "on"
@@ -92,12 +98,17 @@ export default function IdentifyTab() {
 
     setIsSaving(true);
     try {
+      const targetArea = selectedAreaId
+        ? areas.find((a) => a.id === selectedAreaId)
+        : null;
+
       await createPlant({
         name: result.commonName,
         scientificName: result.scientificName,
-        locationName: "Sin ubicación",
+        locationName: targetArea?.name ?? "Sin ubicación",
         wateringFrequencyLabel: result.wateringFrequency || "Cada 7 días",
         photoUri: lastPhotoUri ?? undefined,
+        areaId: selectedAreaId,
       });
       Alert.alert(
         "Planta guardada",
@@ -112,6 +123,7 @@ export default function IdentifyTab() {
       setScreenState("camera");
       setResult(null);
       setLastPhotoUri(null);
+      setSelectedAreaId(null);
     } catch (error) {
       const message =
         error instanceof Error
@@ -146,37 +158,31 @@ export default function IdentifyTab() {
   if (!isPermissionGranted) {
     return (
       <SafeAreaView style={styles.container}>
-        <ScrollView contentContainerStyle={[styles.content, styles.centered]}>
-          <View style={styles.permissionCard}>
-            <View style={styles.permissionIconWrap}>
-              <MaterialCommunityIcons
-                name="camera-off"
-                size={32}
-                color={colors.textSecondary}
-              />
-            </View>
-            <Text style={styles.permissionTitle}>Cámara sin acceso</Text>
-            <Text style={styles.permissionBody}>
-              Planty necesita acceso a tu cámara para identificar plantas. Sin
-              este permiso la identificación no estará disponible, pero puedes
-              seguir usando el resto de la app.
+        <TopBar title="Identificar" subtitle="Permiso necesario" />
+        <View style={[styles.content, styles.centered]}>
+          <MaterialCommunityIcons
+            name="camera-off"
+            size={48}
+            color={colors.textSecondary}
+          />
+          <Text style={styles.permissionBody}>
+            Habilita la camara para identificar plantas.
+          </Text>
+          <Pressable
+            onPress={() => void requestPermissions()}
+            style={({ pressed }) => [
+              styles.primaryBtn,
+              pressed && styles.primaryBtnPressed,
+            ]}
+          >
+            <Text style={styles.primaryBtnText}>Solicitar permisos</Text>
+          </Pressable>
+          <Pressable onPress={handleOpenSettings} style={styles.settingsLink}>
+            <Text style={styles.settingsLinkText}>
+              Abrir configuracion del sistema
             </Text>
-            <Pressable
-              onPress={() => void requestPermissions()}
-              style={({ pressed }) => [
-                styles.primaryBtn,
-                pressed && styles.primaryBtnPressed,
-              ]}
-            >
-              <Text style={styles.primaryBtnText}>Solicitar permisos</Text>
-            </Pressable>
-            <Pressable onPress={handleOpenSettings} style={styles.settingsLink}>
-              <Text style={styles.settingsLinkText}>
-                Abrir configuración del sistema
-              </Text>
-            </Pressable>
-          </View>
-        </ScrollView>
+          </Pressable>
+        </View>
       </SafeAreaView>
     );
   }
@@ -194,6 +200,7 @@ export default function IdentifyTab() {
   if (screenState === "result" && result) {
     return (
       <SafeAreaView style={styles.container}>
+        <TopBar title="Resultado" subtitle="Identificacion completa" />
         <ScrollView
           contentContainerStyle={styles.resultContent}
           showsVerticalScrollIndicator={false}
@@ -433,6 +440,111 @@ export default function IdentifyTab() {
                 </View>
               )}
 
+              {/* Selector de area destino */}
+              {result.isPlant && (
+                <View style={styles.areaSelectorWrap}>
+                  <Text style={styles.areaSelectorTitle}>
+                    Donde la vas a poner?
+                  </Text>
+
+                  {result.suggestedAreaType ? (
+                    <View style={styles.suggestionBanner}>
+                      <MaterialCommunityIcons
+                        name="lightbulb-on"
+                        size={16}
+                        color={colors.primary}
+                      />
+                      <Text style={styles.suggestionText}>
+                        La IA sugiere{" "}
+                        <Text style={styles.suggestionBold}>
+                          {result.suggestedAreaType.indoor ? "interior" : "exterior"}
+                        </Text>
+                        , {result.suggestedAreaType.lightLevel.replace("-", " ")},
+                        humedad {result.suggestedAreaType.humidityLevel}.
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  <View style={styles.areaOptionsRow}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Sin area especifica"
+                      onPress={() => setSelectedAreaId(null)}
+                      style={({ pressed }) => [
+                        styles.areaPill,
+                        selectedAreaId === null && styles.areaPillActive,
+                        pressed && styles.areaPillPressed,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.areaPillText,
+                          selectedAreaId === null && styles.areaPillTextActive,
+                        ]}
+                      >
+                        Sin area
+                      </Text>
+                    </Pressable>
+
+                    {areas.map((area) => {
+                      const isSuggested =
+                        result.suggestedAreaType &&
+                        area.indoor === result.suggestedAreaType.indoor &&
+                        area.lightLevel === result.suggestedAreaType.lightLevel;
+                      const isActive = selectedAreaId === area.id;
+                      return (
+                        <Pressable
+                          key={area.id}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Seleccionar area ${area.name}`}
+                          onPress={() => setSelectedAreaId(area.id)}
+                          style={({ pressed }) => [
+                            styles.areaPill,
+                            isActive && styles.areaPillActive,
+                            isSuggested && !isActive && styles.areaPillSuggested,
+                            pressed && styles.areaPillPressed,
+                          ]}
+                        >
+                          {isSuggested && !isActive ? (
+                            <MaterialCommunityIcons
+                              name="star"
+                              size={12}
+                              color={colors.primary}
+                            />
+                          ) : null}
+                          <Text
+                            style={[
+                              styles.areaPillText,
+                              isActive && styles.areaPillTextActive,
+                              isSuggested && !isActive && styles.areaPillTextSuggested,
+                            ]}
+                          >
+                            {area.name}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Crear nueva area"
+                      onPress={() => router.push("/(app)/forms/area")}
+                      style={({ pressed }) => [
+                        styles.areaPillCreate,
+                        pressed && styles.areaPillPressed,
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name="plus"
+                        size={14}
+                        color={colors.primary}
+                      />
+                      <Text style={styles.areaPillCreateText}>Nueva area</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )}
+
               <Pressable
                 onPress={() => void handleSavePlant()}
                 disabled={isSaving}
@@ -469,27 +581,44 @@ export default function IdentifyTab() {
         />
         <View style={styles.cameraTopBar}>
           <Pressable
-            onPress={toggleFlash}
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar camara"
+            onPress={() => router.replace("/(app)/(tabs)")}
             style={({ pressed }) => [
               styles.cameraControlBtn,
               pressed && { opacity: 0.7 },
             ]}
           >
-            <MaterialCommunityIcons name={flashIcon} size={22} color="#fff" />
+            <MaterialCommunityIcons name="close" size={22} color="#fff" />
           </Pressable>
-          <Pressable
-            onPress={toggleFacing}
-            style={({ pressed }) => [
-              styles.cameraControlBtn,
-              pressed && { opacity: 0.7 },
-            ]}
-          >
-            <MaterialCommunityIcons
-              name="camera-flip-outline"
-              size={22}
-              color="#fff"
-            />
-          </Pressable>
+          <View style={{ flexDirection: "row", gap: 12 }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cambiar flash"
+              onPress={toggleFlash}
+              style={({ pressed }) => [
+                styles.cameraControlBtn,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <MaterialCommunityIcons name={flashIcon} size={22} color="#fff" />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cambiar camara"
+              onPress={toggleFacing}
+              style={({ pressed }) => [
+                styles.cameraControlBtn,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="camera-flip-outline"
+                size={22}
+                color="#fff"
+              />
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.cameraBottomBar}>
@@ -973,9 +1102,11 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     cameraTopBar: {
       position: "absolute",
       top: Spacing.lg,
+      left: Spacing.lg,
       right: Spacing.lg,
       flexDirection: "row",
-      gap: Spacing.sm,
+      alignItems: "center",
+      justifyContent: "space-between",
     },
     cameraControlBtn: {
       width: 42,
@@ -1545,5 +1676,93 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontFamily: Typography.family,
       fontSize: 14,
       lineHeight: 21,
+    },
+    areaSelectorWrap: {
+      gap: Spacing.sm,
+      paddingTop: Spacing.md,
+    },
+    areaSelectorTitle: {
+      color: colors.text,
+      fontFamily: Typography.family,
+      fontSize: 16,
+      fontWeight: "800",
+    },
+    suggestionBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      backgroundColor: isDark ? "#1F3430" : "#E5F3EE",
+      borderRadius: BorderRadius.md,
+      padding: Spacing.sm,
+    },
+    suggestionText: {
+      flex: 1,
+      color: colors.text,
+      fontFamily: Typography.family,
+      fontSize: 13,
+      fontWeight: "500",
+      lineHeight: 18,
+    },
+    suggestionBold: {
+      fontWeight: "800",
+      color: colors.primary,
+    },
+    areaOptionsRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: Spacing.xs,
+    },
+    areaPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: 8,
+      borderRadius: BorderRadius.full,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surfaceCard,
+    },
+    areaPillActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    areaPillSuggested: {
+      borderColor: colors.primary,
+      borderWidth: 2,
+    },
+    areaPillPressed: {
+      opacity: 0.75,
+    },
+    areaPillText: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    areaPillTextActive: {
+      color: colors.onPrimary,
+      fontWeight: "800",
+    },
+    areaPillTextSuggested: {
+      color: colors.primary,
+      fontWeight: "700",
+    },
+    areaPillCreate: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: 8,
+      borderRadius: BorderRadius.full,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      borderStyle: "dashed",
+    },
+    areaPillCreateText: {
+      color: colors.primary,
+      fontFamily: Typography.family,
+      fontSize: 13,
+      fontWeight: "700",
     },
   });

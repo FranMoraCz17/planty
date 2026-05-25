@@ -124,6 +124,31 @@ export async function ensureUserDocument({
   }
 }
 
+export async function updateAvatarUrl(
+  id: string,
+  avatarUrl: string | null,
+): Promise<UserDocument> {
+  try {
+    const userRef = doc(db, "users", id);
+
+    await updateDoc(userRef, {
+      avatarUrl,
+      updatedAt: new Date().toISOString(),
+    });
+
+    const updatedUser = await getUserById(id);
+
+    if (!updatedUser) {
+      throw new Error("El avatar fue actualizado, pero no se pudo recargar el usuario.");
+    }
+
+    return updatedUser;
+  } catch (error) {
+    console.error("Error updating avatar url:", error);
+    throw new Error("No se pudo actualizar la foto en Firestore.");
+  }
+}
+
 export async function updateUserById(id: string, data: UpdateUserInput): Promise<UserDocument> {
   try {
     const userRef = doc(db, "users", id);

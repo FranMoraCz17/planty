@@ -19,6 +19,7 @@ import {
 import FormNotice from "@/src/components/forms/FormNotice";
 import { useDemoData } from "@/src/data/DemoDataProvider";
 import { auth } from "@/src/firebase/firebaseConfig";
+import { getFirebaseAuthErrorMessage } from "@/src/services/authErrors";
 import { ensureUserDocument } from "@/src/services/userService";
 import {
   BorderRadius,
@@ -92,29 +93,6 @@ function AuthInput({
   );
 }
 
-const getFirebaseErrorMessage = (error: unknown, isRegister: boolean) => {
-  const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
-
-  switch (code) {
-    case "auth/invalid-credential":
-    case "auth/wrong-password":
-    case "auth/user-not-found":
-      return "Credenciales inválidas. Verifica correo y contraseña.";
-    case "auth/email-already-in-use":
-      return "Ese correo ya está registrado.";
-    case "auth/invalid-email":
-      return "El correo no tiene un formato válido.";
-    case "auth/weak-password":
-      return "La contraseña debe tener al menos 6 caracteres.";
-    case "auth/network-request-failed":
-      return "No se pudo conectar con Firebase. Revisa tu conexión.";
-    default:
-      return isRegister
-        ? "No se pudo crear la cuenta en Firebase."
-        : "No se pudo iniciar sesión en Firebase.";
-  }
-};
-
 export default function AuthFormScreen({ mode }: AuthFormScreenProps) {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
@@ -187,7 +165,10 @@ export default function AuthFormScreen({ mode }: AuthFormScreenProps) {
       setNotice({
         variant: "error",
         title: isRegister ? "Error al registrar" : "Error al iniciar sesión",
-        message: getFirebaseErrorMessage(error, isRegister),
+        message: getFirebaseAuthErrorMessage(
+          error,
+          isRegister ? "register" : "login",
+        ),
       });
     } finally {
       setIsSubmitting(false);
@@ -279,6 +260,14 @@ export default function AuthFormScreen({ mode }: AuthFormScreenProps) {
               secureTextEntry={!showPassword}
               value={password}
             />
+
+            {!isRegister && (
+              <View style={styles.forgotRow}>
+                <Link href="/(auth)/forgot-password" style={styles.link}>
+                  ¿Olvidaste tu contraseña?
+                </Link>
+              </View>
+            )}
 
             {isRegister && (
               <AuthInput
@@ -532,6 +521,10 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontFamily: Typography.family,
       fontSize: 13,
       fontWeight: "700",
+    },
+    forgotRow: {
+      alignItems: "flex-end",
+      marginTop: -Spacing.xs,
     },
     bottomMeta: {
       flexDirection: "row",

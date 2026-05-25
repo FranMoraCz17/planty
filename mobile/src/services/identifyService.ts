@@ -1,4 +1,15 @@
 import CameraService from "./cameraService";
+import type {
+  AreaHumidityLevel,
+  AreaLightLevel,
+} from "./areaService";
+
+export interface SuggestedAreaType {
+  indoor: boolean;
+  lightLevel: AreaLightLevel;
+  humidityLevel: AreaHumidityLevel;
+  reason: string;
+}
 
 export interface PlantIdentifyResult {
   isPlant: boolean;
@@ -21,10 +32,18 @@ export interface PlantIdentifyResult {
   soil: string;
   careTips: string[];
   commonPests: string[];
+  suggestedAreaType: SuggestedAreaType | null;
   funFact: string | null;
 }
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
+
+interface SuggestedAreaApi {
+  indoor: boolean;
+  light_level: string;
+  humidity_level: string;
+  reason: string;
+}
 
 interface IdentifyApiResponse {
   is_plant: boolean;
@@ -47,7 +66,31 @@ interface IdentifyApiResponse {
   soil: string;
   care_tips: string[];
   common_pests: string[];
+  suggested_area_type: SuggestedAreaApi | null;
   fun_fact: string | null;
+}
+
+function normalizeLight(value: string): AreaLightLevel {
+  switch (value) {
+    case "sombra":
+    case "luz-indirecta":
+    case "luz-brillante":
+    case "sol-directo":
+      return value;
+    default:
+      return "luz-indirecta";
+  }
+}
+
+function normalizeHumidity(value: string): AreaHumidityLevel {
+  switch (value) {
+    case "baja":
+    case "media":
+    case "alta":
+      return value;
+    default:
+      return "media";
+  }
 }
 
 const REQUEST_TIMEOUT_MS = 75_000;
@@ -113,6 +156,17 @@ const IdentifyService = {
 
     const data = (await response.json()) as IdentifyApiResponse;
 
+    const suggestedAreaType: SuggestedAreaType | null = data.suggested_area_type
+      ? {
+          indoor: Boolean(data.suggested_area_type.indoor),
+          lightLevel: normalizeLight(data.suggested_area_type.light_level),
+          humidityLevel: normalizeHumidity(
+            data.suggested_area_type.humidity_level,
+          ),
+          reason: data.suggested_area_type.reason || "",
+        }
+      : null;
+
     return {
       isPlant: data.is_plant,
       commonName: data.common_name,
@@ -134,6 +188,7 @@ const IdentifyService = {
       soil: data.soil,
       careTips: data.care_tips,
       commonPests: data.common_pests,
+      suggestedAreaType,
       funFact: data.fun_fact,
     };
   },

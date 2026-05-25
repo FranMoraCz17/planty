@@ -14,12 +14,22 @@ import {
   type UserDocument,
   updateUserById,
 } from "@/src/services/userService";
+import AreaService, {
+  type AreaDocument,
+  type CreateAreaInput,
+  type UpdateAreaInput,
+} from "@/src/services/areaService";
 
 export type EditableUserFields = Pick<UserDocument, "name" | "username" | "email" | "city">;
 export type EditablePlantFields = Pick<
   PlantDocument,
   "name" | "scientificName" | "locationName" | "wateringFrequencyLabel"
-> & { photoUri?: string };
+> & {
+  photoUri?: string;
+  areaId?: string | null;
+  notes?: string;
+  acquiredAt?: string | null;
+};
 
 interface UpdateOptions {
   simulateFailure?: boolean;
@@ -32,8 +42,11 @@ interface DemoDataContextValue {
   currentUser: UserDocument | null;
   users: UserDocument[];
   plants: PlantDocument[];
+  areas: AreaDocument[];
   getPlantById: (id: string) => PlantDocument | null;
   getPlantsByUser: (userId: string) => PlantDocument[];
+  getAreaById: (id: string) => AreaDocument | null;
+  getPlantsByArea: (areaId: string) => PlantDocument[];
   updateUser: (
     id: string,
     data: EditableUserFields,
@@ -46,6 +59,11 @@ interface DemoDataContextValue {
   ) => Promise<PlantDocument>;
   createPlant: (data: EditablePlantFields, options?: UpdateOptions) => Promise<PlantDocument>;
   deletePlant: (id: string, options?: UpdateOptions) => Promise<void>;
+  createArea: (data: CreateAreaInput) => Promise<AreaDocument>;
+  updateArea: (id: string, data: UpdateAreaInput) => Promise<AreaDocument>;
+  deleteArea: (id: string) => Promise<void>;
+  refreshAreas: () => Promise<void>;
+  refreshCurrentUser: () => Promise<void>;
 }
 
 const DemoDataContext = createContext<DemoDataContextValue | undefined>(undefined);
@@ -88,6 +106,7 @@ const buildSamplePlants = (userId: string): Array<Omit<PlantDocument, "id">> => 
 export function DemoDataProvider({ children }: { children: React.ReactNode }) {
   const [users, setUsers] = useState<UserDocument[]>([]);
   const [plants, setPlants] = useState<PlantDocument[]>([]);
+  const [areas, setAreas] = useState<AreaDocument[]>([]);
   const [currentUserId, setCurrentUserId] = useState("");
   const [isReady, setIsReady] = useState(false);
 
@@ -99,6 +118,11 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
   const getPlantById = (id: string) => plants.find((plant) => plant.id === id) ?? null;
 
   const getPlantsByUser = (userId: string) => plants.filter((plant) => plant.userId === userId);
+
+  const getAreaById = (id: string) => areas.find((area) => area.id === id) ?? null;
+
+  const getPlantsByArea = (areaId: string) =>
+    plants.filter((plant) => plant.areaId === areaId);
 
   useEffect(() => {
     let isMounted = true;
@@ -151,6 +175,8 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
           userPlants = await getPlantsByUserFromFirestore(firebaseUser.uid);
         }
 
+        const userAreas = await AreaService.getAreasByUser(firebaseUser.uid);
+
         if (!isMounted) {
           return;
         }
@@ -158,6 +184,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
         setCurrentUserId(firebaseUser.uid);
         setUsers(userDocument ? [userDocument] : []);
         setPlants(userPlants);
+        setAreas(userAreas);
         setIsReady(true);
       } catch (error) {
         console.error("Error syncing auth user:", error);
@@ -169,6 +196,7 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
         setCurrentUserId("");
         setUsers([]);
         setPlants([]);
+        setAreas([]);
         setIsReady(true);
       }
     };
@@ -245,6 +273,9 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
         wateringFrequencyLabel: data.wateringFrequencyLabel,
         createdAt: new Date().toISOString(),
         photoUri: data.photoUri,
+        areaId: data.areaId ?? null,
+        notes: data.notes,
+        acquiredAt: data.acquiredAt ?? null,
       });
 
       const refreshedPlants = await getPlantsByUserFromFirestore(currentUserId);
@@ -276,6 +307,51 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const refreshCurrentUser = async () => {
+    if (!currentUserId) return;
+    try {
+      const refreshed = await getUserById(currentUserId);
+      if (refreshed) {
+        setUsers((prev) => {
+          const others = prev.filter((u) => u.id !== refreshed.id);
+          return [...others, refreshed];
+        });
+      }
+    } catch (error) {
+      console.error("Error refreshing current user:", error);
+    }
+  };
+
+  const refreshAreas = async () => {
+    if (!currentUserId) return;
+    try {
+      const refreshed = await AreaService.getAreasByUser(currentUserId);
+      setAreas(refreshed);
+    } catch (error) {
+      console.error("Error refreshing areas:", error);
+    }
+  };
+
+  const createArea = async (data: CreateAreaInput): Promise<AreaDocument> => {
+    const created = await AreaService.createArea(data);
+    setAreas((prev) => [...prev, created]);
+    return created;
+  };
+
+  const updateArea = async (
+    id: string,
+    data: UpdateAreaInput,
+  ): Promise<AreaDocument> => {
+    const updated = await AreaService.updateArea(id, data);
+    setAreas((prev) => prev.map((a) => (a.id === id ? updated : a)));
+    return updated;
+  };
+
+  const deleteArea = async (id: string): Promise<void> => {
+    await AreaService.deleteArea(id);
+    setAreas((prev) => prev.filter((a) => a.id !== id));
+  };
+
   if (!isReady) {
     return null;
   }
@@ -289,12 +365,20 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
         currentUser,
         users,
         plants,
+        areas,
+        getAreaById,
+        getPlantsByArea,
+        createArea,
+        updateArea,
+        deleteArea,
+        refreshAreas,
         getPlantById,
         getPlantsByUser,
         updateUser,
         updatePlant,
         createPlant,
         deletePlant,
+        refreshCurrentUser,
       }}
     >
       {children}

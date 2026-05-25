@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
-from .routers import diagnoses, health, identify, plants, species, users
+from .routers import diagnose, diagnoses, health, identify, plants, species, users
 
 
 def create_app() -> FastAPI:
@@ -27,5 +27,6 @@ def create_app() -> FastAPI:
     app.include_router(species.router)
     app.include_router(diagnoses.router)
     app.include_router(identify.router)
+    app.include_router(diagnose.router)
 
     return app

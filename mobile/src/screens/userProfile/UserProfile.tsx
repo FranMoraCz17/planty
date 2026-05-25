@@ -4,6 +4,8 @@ import { useRouter } from "expo-router";
 import { signOut } from "firebase/auth";
 import { auth } from "@/src/firebase/firebaseConfig";
 import {
+  ActivityIndicator,
+  Image,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -12,6 +14,8 @@ import {
   View,
 } from "react-native";
 import { useDemoData } from "@/src/data/DemoDataProvider";
+import FormNotice from "@/src/components/forms/FormNotice";
+import { useProfilePhoto } from "@/src/hooks/useProfilePhoto";
 import {
   BorderRadius,
   Spacing,
@@ -26,8 +30,17 @@ type CollectionView = "plantas" | "sitios";
 export default function UserProfile() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
-  const { currentUser, currentUserId, getPlantsByUser } = useDemoData();
+  const { currentUser, currentUserId, getPlantsByUser, refreshCurrentUser } =
+    useDemoData();
   const styles = createStyles(colors, isDark);
+
+  const { isUploading, error: photoError, changePhoto, resetError } =
+    useProfilePhoto({
+      userId: currentUserId,
+      onUploaded: () => {
+        void refreshCurrentUser();
+      },
+    });
 
   const [collectionView, setCollectionView] = useState<CollectionView>("plantas");
   const plants = getPlantsByUser(currentUserId);
@@ -91,10 +104,52 @@ export default function UserProfile() {
         </View>
 
         <View style={styles.heroCard}>
+          {photoError && (
+            <FormNotice
+              variant="error"
+              title="No se pudo cambiar la foto"
+              message={photoError}
+              onDismiss={resetError}
+            />
+          )}
           <View style={styles.heroTop}>
-            <View style={styles.avatarWrap}>
-              <MaterialCommunityIcons name="account-outline" size={30} color={colors.onPrimary} />
-            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cambiar foto de perfil"
+              onPress={() => void changePhoto()}
+              disabled={isUploading}
+              style={({ pressed }) => [
+                styles.avatarWrap,
+                pressed && !isUploading && styles.avatarPressed,
+              ]}
+            >
+              {currentUser.avatarUrl ? (
+                <Image
+                  source={{ uri: currentUser.avatarUrl }}
+                  style={styles.avatarImage}
+                  accessibilityIgnoresInvertColors
+                />
+              ) : (
+                <MaterialCommunityIcons
+                  name="account-outline"
+                  size={30}
+                  color={colors.onPrimary}
+                />
+              )}
+              {isUploading ? (
+                <View style={styles.avatarOverlay}>
+                  <ActivityIndicator color={colors.onPrimary} />
+                </View>
+              ) : (
+                <View style={styles.avatarBadge}>
+                  <MaterialCommunityIcons
+                    name="camera-outline"
+                    size={14}
+                    color={colors.onPrimary}
+                  />
+                </View>
+              )}
+            </Pressable>
             <View style={styles.profileInfo}>
               <Text style={styles.profileName}>{currentUser.name}</Text>
               <Text style={styles.profileAlias}>@{currentUser.username}</Text>
@@ -342,6 +397,38 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       height: 82,
       borderRadius: 41,
       backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+      overflow: "hidden",
+      position: "relative",
+    },
+    avatarPressed: {
+      opacity: 0.85,
+    },
+    avatarImage: {
+      width: "100%",
+      height: "100%",
+    },
+    avatarOverlay: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(0,0,0,0.45)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    avatarBadge: {
+      position: "absolute",
+      bottom: 2,
+      right: 2,
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      backgroundColor: colors.primary,
+      borderWidth: 2,
+      borderColor: colors.surfaceCard,
       alignItems: "center",
       justifyContent: "center",
     },

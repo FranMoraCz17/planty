@@ -7,6 +7,13 @@ class PlantIdentifyRequest(BaseModel):
     mime_type: str = "image/jpeg"
 
 
+class SuggestedAreaType(BaseModel):
+    indoor: bool
+    light_level: str
+    humidity_level: str
+    reason: str
+
+
 class PlantIdentifyResponse(BaseModel):
     is_plant: bool
     common_name: str
@@ -28,4 +35,5 @@ class PlantIdentifyResponse(BaseModel):
     soil: str
     care_tips: list[str]
     common_pests: list[str]
+    suggested_area_type: Optional[SuggestedAreaType] = None
     fun_fact: Optional[str] = None

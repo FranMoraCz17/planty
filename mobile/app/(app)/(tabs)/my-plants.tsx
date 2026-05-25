@@ -1,8 +1,24 @@
 import React, { useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Alert, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Alert,
+  Image,
+  LayoutAnimation,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  UIManager,
+  View,
+} from "react-native";
 import { useDemoData } from "@/src/data/DemoDataProvider";
+import TopBar from "@/src/components/layout/TopBar";
+import { usePlantPhoto } from "@/src/hooks/usePlantPhoto";
+import type { AreaDocument } from "@/src/services/areaService";
+import type { PlantDocument } from "@/src/services/plantService";
 import {
   BorderRadius,
   Spacing,
@@ -10,35 +26,88 @@ import {
   type ThemeColors,
 } from "@/src/theme/designSystem";
 import { useAppTheme } from "@/src/theme/ThemeProvider";
-import ThemedButton from "@/src/components/ui/ThemedButton";
 
-type PlantsTab = "plantas" | "recordatorios";
+if (
+  Platform.OS === "android" &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+type ViewMode = "by-area" | "list";
+
+const LIGHT_LABEL: Record<string, string> = {
+  sombra: "Sombra",
+  "luz-indirecta": "Luz indirecta",
+  "luz-brillante": "Luz brillante",
+  "sol-directo": "Sol directo",
+};
+
+const LIGHT_ICON: Record<
+  string,
+  keyof typeof MaterialCommunityIcons.glyphMap
+> = {
+  sombra: "weather-night",
+  "luz-indirecta": "weather-partly-cloudy",
+  "luz-brillante": "weather-sunny",
+  "sol-directo": "white-balance-sunny",
+};
+
+function parseFrequencyDays(label: string | undefined): number | null {
+  if (!label) return null;
+  const match = label.match(/(\d+)/);
+  if (!match) return null;
+  const days = parseInt(match[1], 10);
+  return Number.isFinite(days) && days > 0 ? days : null;
+}
 
 export default function MyPlantsTab() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
-  const { currentUserId, currentUser, deletePlant, getPlantsByUser } = useDemoData();
+  const { currentUserId, deletePlant, getPlantsByUser, areas } = useDemoData();
   const styles = createStyles(colors, isDark);
-  const [activeTab, setActiveTab] = useState<PlantsTab>("plantas");
   const plants = getPlantsByUser(currentUserId);
-  const totalLocations = new Set(plants.map((plant) => plant.locationName)).size;
 
-  const groups = useMemo(() => {
-    const byLocation = new Map<string, number>();
+  const [viewMode, setViewMode] = useState<ViewMode>("by-area");
+  const [expandedAreas, setExpandedAreas] = useState<Set<string>>(
+    () => new Set(areas.map((a) => a.id).concat("unassigned")),
+  );
 
-    plants.forEach((plant) => {
-      const currentCount = byLocation.get(plant.locationName) ?? 0;
-      byLocation.set(plant.locationName, currentCount + 1);
+  const plantsByAreaId = useMemo(() => {
+    const map = new Map<string, PlantDocument[]>();
+    map.set("unassigned", []);
+    areas.forEach((a) => map.set(a.id, []));
+    plants.forEach((p) => {
+      const key = p.areaId ?? "unassigned";
+      const arr = map.get(key) ?? [];
+      arr.push(p);
+      map.set(key, arr);
     });
+    return map;
+  }, [plants, areas]);
 
-    return Array.from(byLocation.entries()).map(([title, count], index) => ({
-      id: `g-${index}`,
-      title,
-      count,
-    }));
+  const totalAreas = areas.length;
+  const totalPlants = plants.length;
+
+  const healthPct = useMemo(() => {
+    if (plants.length === 0) return 0;
+    const valid = plants.filter(
+      (p) => parseFrequencyDays(p.wateringFrequencyLabel) !== null,
+    ).length;
+    return Math.round((valid / plants.length) * 100);
   }, [plants]);
 
-  const handleDeletePlant = (plantId: string, plantName: string) => {
+  const toggleArea = (areaId: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedAreas((prev) => {
+      const next = new Set(prev);
+      if (next.has(areaId)) next.delete(areaId);
+      else next.add(areaId);
+      return next;
+    });
+  };
+
+  const handleDelete = (plantId: string, plantName: string) => {
     Alert.alert(
       "Eliminar planta",
       `Se eliminara ${plantName} de tu coleccion.`,
@@ -50,7 +119,9 @@ export default function MyPlantsTab() {
           onPress: () => {
             void deletePlant(plantId).catch((error: unknown) => {
               const message =
-                error instanceof Error ? error.message : "No se pudo eliminar la planta.";
+                error instanceof Error
+                  ? error.message
+                  : "No se pudo eliminar la planta.";
               Alert.alert("Error", message);
             });
           },
@@ -61,149 +132,478 @@ export default function MyPlantsTab() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.headerCard}>
-          <View style={styles.headerTop}>
-            <Text style={styles.title}>Mis plantas</Text>
-            <ThemedButton
-              label="Agregar planta"
-              accessibilityLabel="Crear una planta nueva"
-              onPress={() => router.push("/(app)/forms/plant?mode=create")}
-              style={styles.addButton}
+      <TopBar title="Plantas" subtitle="Tu coleccion" />
+
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryValue}>{totalPlants}</Text>
+              <Text style={styles.summaryLabel}>
+                {totalPlants === 1 ? "Planta" : "Plantas"}
+              </Text>
+            </View>
+            <View style={styles.summaryDivider} />
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryValue}>{totalAreas}</Text>
+              <Text style={styles.summaryLabel}>
+                {totalAreas === 1 ? "Area" : "Areas"}
+              </Text>
+            </View>
+            <View style={styles.summaryDivider} />
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryValue}>{healthPct}%</Text>
+              <Text style={styles.summaryLabel}>Al dia</Text>
+            </View>
+          </View>
+          <View style={styles.healthBarWrap}>
+            <View
+              style={[
+                styles.healthBarFill,
+                { width: `${healthPct}%` as `${number}%` },
+              ]}
             />
           </View>
-          <Text style={styles.body}>
-            Organiza el inventario real asociado a tu cuenta y mantenlo actualizado.
-          </Text>
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryValue}>{plants.length}</Text>
-              <Text style={styles.summaryLabel}>Plantas</Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryValue}>{totalLocations}</Text>
-              <Text style={styles.summaryLabel}>Ubicaciones</Text>
-            </View>
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryValue}>{currentUser?.pendingCount ?? 0}</Text>
-              <Text style={styles.summaryLabel}>Pendientes</Text>
-            </View>
-          </View>
         </View>
 
-        <View style={styles.segmentWrap}>
-          {([
-            { key: "plantas", label: "Plantas" },
-            { key: "recordatorios", label: "Recordatorios" },
-          ] as const).map((tab) => (
-            <Pressable
-              key={tab.key}
-              accessibilityRole="button"
-              accessibilityLabel={`Ver ${tab.label}`}
-              onPress={() => setActiveTab(tab.key)}
-              style={[styles.segmentButton, activeTab === tab.key && styles.segmentButtonActive]}
-            >
-              <Text style={[styles.segmentText, activeTab === tab.key && styles.segmentTextActive]}>
-                {tab.label}
-              </Text>
-            </Pressable>
-          ))}
+        <View style={styles.viewToggle}>
+          <ToggleOption
+            label="Por area"
+            icon="home-outline"
+            active={viewMode === "by-area"}
+            onPress={() => setViewMode("by-area")}
+            colors={colors}
+            isDark={isDark}
+          />
+          <ToggleOption
+            label="Lista"
+            icon="format-list-bulleted"
+            active={viewMode === "list"}
+            onPress={() => setViewMode("list")}
+            colors={colors}
+            isDark={isDark}
+          />
+          <View style={{ flex: 1 }} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Gestionar areas"
+            onPress={() => router.push("/(app)/areas")}
+            style={({ pressed }) => [
+              styles.manageBtn,
+              pressed && { opacity: 0.7 },
+            ]}
+          >
+            <MaterialCommunityIcons
+              name="cog-outline"
+              size={14}
+              color={colors.primary}
+            />
+            <Text style={styles.manageBtnText}>Gestionar</Text>
+          </Pressable>
         </View>
 
-        {activeTab === "plantas" && (
-          <>
-            {groups.length > 0 ? (
-              <View style={styles.groupsGrid}>
-                {groups.map((group) => (
-                  <View key={group.id} style={styles.groupCard}>
-                    <View style={styles.groupIcon}>
-                      <MaterialCommunityIcons
-                        name="map-marker-radius-outline"
-                        size={18}
-                        color={colors.primary}
-                      />
-                    </View>
-                    <Text style={styles.groupTitle}>{group.title}</Text>
-                    <Text style={styles.groupCount}>{group.count} plantas</Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-
-            {plants.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <MaterialCommunityIcons
-                  name="sprout-outline"
-                  size={20}
-                  color={colors.textSecondary}
-                />
-                <Text style={styles.emptyTitle}>Sin plantas registradas</Text>
-                <Text style={styles.emptyBody}>
-                  Agrega tu primera planta para empezar a editar tu coleccion y mostrar datos reales.
-                </Text>
-                <ThemedButton
-                  accessibilityLabel="Agregar primera planta"
-                  label="Agregar primera planta"
-                  onPress={() => router.push("/(app)/forms/plant?mode=create")}
-                />
-              </View>
-            ) : (
-              <View style={styles.listWrap}>
-                {plants.map((plant) => (
-                  <View key={plant.id} style={styles.plantCard}>
-                    <View style={styles.plantHeader}>
-                      <View style={styles.plantIconWrap}>
-                        <MaterialCommunityIcons name="leaf" size={18} color={colors.onPrimary} />
-                      </View>
-                      <View style={styles.plantCopy}>
-                        <Text style={styles.plantName}>{plant.name}</Text>
-                        <Text style={styles.plantScientificName}>{plant.scientificName}</Text>
-                      </View>
-                      <Pressable
-                        accessibilityLabel={`Editar ${plant.name}`}
-                        accessibilityRole="button"
-                        onPress={() => router.push(`/(app)/forms/plant?id=${plant.id}`)}
-                        style={({ pressed }) => [
-                          styles.editButton,
-                          pressed && styles.editButtonPressed,
-                        ]}
-                      >
-                        <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.primary} />
-                      </Pressable>
-                      <Pressable
-                        accessibilityLabel={`Eliminar ${plant.name}`}
-                        accessibilityRole="button"
-                        onPress={() => handleDeletePlant(plant.id, plant.name)}
-                        style={({ pressed }) => [
-                          styles.deleteButton,
-                          pressed && styles.deleteButtonPressed,
-                        ]}
-                      >
-                        <MaterialCommunityIcons name="trash-can-outline" size={18} color={colors.error} />
-                      </Pressable>
-                    </View>
-                    <View style={styles.metaRow}>
-                      <Text style={styles.metaChip}>Ubicacion: {plant.locationName}</Text>
-                      <Text style={styles.metaChip}>Riego: {plant.wateringFrequencyLabel}</Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
-          </>
-        )}
-
-        {activeTab === "recordatorios" && (
-          <View style={styles.emptyCard}>
-            <MaterialCommunityIcons name="calendar-clock" size={20} color={colors.textSecondary} />
-            <Text style={styles.emptyTitle}>Sin recordatorios activos</Text>
-            <Text style={styles.emptyBody}>
-              Cuando agregues plantas, aqui se organizaran riegos y tareas.
+        {plants.length === 0 ? (
+          <View style={styles.emptyWrap}>
+            <MaterialCommunityIcons
+              name="sprout-outline"
+              size={48}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.emptyText}>
+              Aun no hay plantas. Agrega la primera.
             </Text>
           </View>
+        ) : viewMode === "list" ? (
+          plants.map((plant) => (
+            <PlantRow
+              key={plant.id}
+              plant={plant}
+              colors={colors}
+              isDark={isDark}
+              onEdit={() => router.push(`/(app)/forms/plant?id=${plant.id}`)}
+              onDelete={() => handleDelete(plant.id, plant.name)}
+            />
+          ))
+        ) : (
+          <>
+            {areas.map((area) => {
+              const areaPlants = plantsByAreaId.get(area.id) ?? [];
+              const expanded = expandedAreas.has(area.id);
+              return (
+                <AreaSection
+                  key={area.id}
+                  area={area}
+                  plants={areaPlants}
+                  expanded={expanded}
+                  onToggle={() => toggleArea(area.id)}
+                  onEditPlant={(p) =>
+                    router.push(`/(app)/forms/plant?id=${p.id}`)
+                  }
+                  onDeletePlant={(p) => handleDelete(p.id, p.name)}
+                  onEditArea={() =>
+                    router.push(`/(app)/forms/area?id=${area.id}`)
+                  }
+                  colors={colors}
+                  isDark={isDark}
+                />
+              );
+            })}
+
+            {(plantsByAreaId.get("unassigned") ?? []).length > 0 ? (
+              <UnassignedSection
+                plants={plantsByAreaId.get("unassigned") ?? []}
+                expanded={expandedAreas.has("unassigned")}
+                onToggle={() => toggleArea("unassigned")}
+                onEditPlant={(p) =>
+                  router.push(`/(app)/forms/plant?id=${p.id}`)
+                }
+                onDeletePlant={(p) => handleDelete(p.id, p.name)}
+                colors={colors}
+                isDark={isDark}
+              />
+            ) : null}
+
+            {areas.length === 0 ? (
+              <View style={styles.noAreasHint}>
+                <MaterialCommunityIcons
+                  name="lightbulb-outline"
+                  size={16}
+                  color={colors.primary}
+                />
+                <Text style={styles.noAreasHintText}>
+                  Crea areas para organizar tus plantas por espacio fisico.
+                </Text>
+              </View>
+            ) : null}
+          </>
         )}
       </ScrollView>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Agregar planta"
+        onPress={() => router.push("/(app)/add-plant")}
+        style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
+      >
+        <MaterialCommunityIcons name="plus" size={24} color={colors.onPrimary} />
+      </Pressable>
     </SafeAreaView>
+  );
+}
+
+function ToggleOption({
+  label,
+  icon,
+  active,
+  onPress,
+  colors,
+  isDark,
+}: {
+  label: string;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  active: boolean;
+  onPress: () => void;
+  colors: ThemeColors;
+  isDark: boolean;
+}) {
+  const styles = createStyles(colors, isDark);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.toggleBtn,
+        active && styles.toggleBtnActive,
+        pressed && { opacity: 0.7 },
+      ]}
+    >
+      <MaterialCommunityIcons
+        name={icon}
+        size={14}
+        color={active ? colors.onPrimary : colors.textSecondary}
+      />
+      <Text style={[styles.toggleText, active && styles.toggleTextActive]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function AreaSection({
+  area,
+  plants,
+  expanded,
+  onToggle,
+  onEditPlant,
+  onDeletePlant,
+  onEditArea,
+  colors,
+  isDark,
+}: {
+  area: AreaDocument;
+  plants: PlantDocument[];
+  expanded: boolean;
+  onToggle: () => void;
+  onEditPlant: (p: PlantDocument) => void;
+  onDeletePlant: (p: PlantDocument) => void;
+  onEditArea: () => void;
+  colors: ThemeColors;
+  isDark: boolean;
+}) {
+  const styles = createStyles(colors, isDark);
+  const validCount = plants.filter(
+    (p) => parseFrequencyDays(p.wateringFrequencyLabel) !== null,
+  ).length;
+  const healthPct =
+    plants.length === 0 ? 0 : Math.round((validCount / plants.length) * 100);
+
+  return (
+    <View style={styles.areaSection}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${expanded ? "Contraer" : "Expandir"} ${area.name}`}
+        onPress={onToggle}
+        style={({ pressed }) => [
+          styles.areaHeader,
+          pressed && { opacity: 0.9 },
+        ]}
+      >
+        <View style={styles.areaThumbWrap}>
+          {area.photoUri ? (
+            <Image source={{ uri: area.photoUri }} style={styles.areaThumb} />
+          ) : (
+            <MaterialCommunityIcons
+              name={area.indoor ? "home" : "tree"}
+              size={20}
+              color={colors.onPrimary}
+            />
+          )}
+        </View>
+        <View style={styles.areaHeaderBody}>
+          <View style={styles.areaHeaderRow}>
+            <Text style={styles.areaName} numberOfLines={1}>
+              {area.name}
+            </Text>
+            <MaterialCommunityIcons
+              name={expanded ? "chevron-up" : "chevron-down"}
+              size={20}
+              color={colors.textSecondary}
+            />
+          </View>
+          <View style={styles.areaMetaRow}>
+            <MaterialCommunityIcons
+              name={LIGHT_ICON[area.lightLevel] ?? "weather-partly-cloudy"}
+              size={11}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.areaMetaText}>
+              {LIGHT_LABEL[area.lightLevel] ?? area.lightLevel}
+            </Text>
+            <Text style={styles.areaMetaDot}>·</Text>
+            <Text style={styles.areaMetaText}>
+              Humedad {area.humidityLevel}
+            </Text>
+            <Text style={styles.areaMetaDot}>·</Text>
+            <Text style={styles.areaMetaText}>
+              {plants.length} {plants.length === 1 ? "planta" : "plantas"}
+            </Text>
+          </View>
+          <View style={styles.miniHealthBar}>
+            <View
+              style={[
+                styles.miniHealthFill,
+                { width: `${healthPct}%` as `${number}%` },
+              ]}
+            />
+          </View>
+        </View>
+      </Pressable>
+
+      {expanded ? (
+        <View style={styles.areaPlantsList}>
+          {plants.length === 0 ? (
+            <View style={styles.emptyAreaBlock}>
+              <Text style={styles.emptyAreaText}>
+                Sin plantas asignadas todavia.
+              </Text>
+            </View>
+          ) : (
+            plants.map((plant) => (
+              <PlantRow
+                key={plant.id}
+                plant={plant}
+                colors={colors}
+                isDark={isDark}
+                onEdit={() => onEditPlant(plant)}
+                onDelete={() => onDeletePlant(plant)}
+                compact
+              />
+            ))
+          )}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Editar area ${area.name}`}
+            onPress={onEditArea}
+            style={({ pressed }) => [
+              styles.editAreaLink,
+              pressed && { opacity: 0.6 },
+            ]}
+          >
+            <MaterialCommunityIcons
+              name="pencil-outline"
+              size={14}
+              color={colors.primary}
+            />
+            <Text style={styles.editAreaLinkText}>Editar area</Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function UnassignedSection({
+  plants,
+  expanded,
+  onToggle,
+  onEditPlant,
+  onDeletePlant,
+  colors,
+  isDark,
+}: {
+  plants: PlantDocument[];
+  expanded: boolean;
+  onToggle: () => void;
+  onEditPlant: (p: PlantDocument) => void;
+  onDeletePlant: (p: PlantDocument) => void;
+  colors: ThemeColors;
+  isDark: boolean;
+}) {
+  const styles = createStyles(colors, isDark);
+  return (
+    <View style={styles.areaSection}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${expanded ? "Contraer" : "Expandir"} sin area`}
+        onPress={onToggle}
+        style={({ pressed }) => [
+          styles.areaHeader,
+          pressed && { opacity: 0.9 },
+        ]}
+      >
+        <View
+          style={[styles.areaThumbWrap, { backgroundColor: colors.disabled }]}
+        >
+          <MaterialCommunityIcons
+            name="help-circle-outline"
+            size={20}
+            color={colors.onPrimary}
+          />
+        </View>
+        <View style={styles.areaHeaderBody}>
+          <View style={styles.areaHeaderRow}>
+            <Text style={styles.areaName}>Sin area asignada</Text>
+            <MaterialCommunityIcons
+              name={expanded ? "chevron-up" : "chevron-down"}
+              size={20}
+              color={colors.textSecondary}
+            />
+          </View>
+          <Text style={styles.areaMetaText}>
+            {plants.length} {plants.length === 1 ? "planta" : "plantas"}
+          </Text>
+        </View>
+      </Pressable>
+
+      {expanded ? (
+        <View style={styles.areaPlantsList}>
+          {plants.map((plant) => (
+            <PlantRow
+              key={plant.id}
+              plant={plant}
+              colors={colors}
+              isDark={isDark}
+              onEdit={() => onEditPlant(plant)}
+              onDelete={() => onDeletePlant(plant)}
+              compact
+            />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function PlantRow({
+  plant,
+  colors,
+  isDark,
+  onEdit,
+  onDelete,
+  compact = false,
+}: {
+  plant: PlantDocument;
+  colors: ThemeColors;
+  isDark: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  compact?: boolean;
+}) {
+  const styles = createStyles(colors, isDark);
+  const { photoUri } = usePlantPhoto({
+    scientificName: plant.scientificName,
+  });
+
+  return (
+    <View style={[styles.plantRow, compact && styles.plantRowCompact]}>
+      <View style={styles.plantPhotoWrap}>
+        {photoUri ? (
+          <Image source={{ uri: photoUri }} style={styles.plantPhoto} />
+        ) : (
+          <MaterialCommunityIcons
+            name="leaf"
+            size={16}
+            color={colors.onPrimary}
+          />
+        )}
+      </View>
+      <View style={styles.plantBody}>
+        <Text style={styles.plantName} numberOfLines={1}>
+          {plant.name}
+        </Text>
+        <Text style={styles.plantMeta} numberOfLines={1}>
+          {plant.wateringFrequencyLabel}
+        </Text>
+      </View>
+      <Pressable
+        accessibilityLabel={`Editar ${plant.name}`}
+        accessibilityRole="button"
+        onPress={onEdit}
+        style={({ pressed }) => [styles.rowAction, pressed && styles.pressed]}
+      >
+        <MaterialCommunityIcons
+          name="pencil-outline"
+          size={16}
+          color={colors.textSecondary}
+        />
+      </Pressable>
+      <Pressable
+        accessibilityLabel={`Eliminar ${plant.name}`}
+        accessibilityRole="button"
+        onPress={onDelete}
+        style={({ pressed }) => [styles.rowAction, pressed && styles.pressed]}
+      >
+        <MaterialCommunityIcons
+          name="trash-can-outline"
+          size={16}
+          color={colors.textSecondary}
+        />
+      </Pressable>
+    </View>
   );
 }
 
@@ -214,244 +614,309 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       backgroundColor: colors.surface,
     },
     content: {
-      padding: Spacing.lg,
-      gap: Spacing.md,
-      paddingBottom: Spacing.xxl,
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.xs,
+      paddingBottom: 130,
+      gap: Spacing.sm,
     },
-    headerCard: {
+    summaryCard: {
       backgroundColor: colors.surfaceCard,
       borderRadius: BorderRadius.lg,
       borderWidth: 1,
       borderColor: colors.border,
-      padding: Spacing.lg,
+      padding: Spacing.md,
       gap: Spacing.sm,
-    },
-    headerTop: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: Spacing.sm,
-    },
-    addButton: {
-      minWidth: 120,
-      paddingHorizontal: Spacing.sm,
-      paddingVertical: Spacing.sm,
-    },
-    title: {
-      color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: Typography.title.fontSize - 2,
-      fontWeight: Typography.title.fontWeight,
-      lineHeight: Typography.title.lineHeight,
-    },
-    body: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize,
-      fontWeight: Typography.body.fontWeight,
-      lineHeight: Typography.body.lineHeight,
     },
     summaryRow: {
       flexDirection: "row",
-      gap: Spacing.sm,
+      alignItems: "center",
     },
-    summaryCard: {
+    summaryItem: {
       flex: 1,
-      borderRadius: BorderRadius.md,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: isDark ? "#1A2A26" : "#F3FBF7",
-      paddingVertical: Spacing.md,
       alignItems: "center",
       gap: 2,
     },
+    summaryDivider: {
+      width: 1,
+      height: 32,
+      backgroundColor: colors.border,
+    },
     summaryValue: {
-      color: colors.primary,
+      color: colors.text,
       fontFamily: Typography.family,
       fontSize: Typography.body.fontSize + 6,
-      fontWeight: "700",
-      lineHeight: Typography.body.lineHeight,
+      fontWeight: "800",
+      letterSpacing: -0.3,
     },
     summaryLabel: {
       color: colors.textSecondary,
       fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
+      fontSize: Typography.caption.fontSize,
       fontWeight: "600",
-      lineHeight: Typography.caption.lineHeight,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
     },
-    segmentWrap: {
-      backgroundColor: isDark ? "#20352F" : "#DFF0EA",
-      borderRadius: BorderRadius.md,
-      padding: 4,
+    healthBarWrap: {
+      height: 6,
+      backgroundColor: isDark ? "#22332F" : "#E5F3EE",
+      borderRadius: 3,
+      overflow: "hidden",
+    },
+    healthBarFill: {
+      height: "100%",
+      backgroundColor: colors.primary,
+      borderRadius: 3,
+    },
+    viewToggle: {
       flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.xs,
+      marginVertical: Spacing.xs,
+    },
+    toggleBtn: {
+      flexDirection: "row",
+      alignItems: "center",
       gap: 4,
-    },
-    segmentButton: {
-      flex: 1,
-      minHeight: 40,
-      borderRadius: BorderRadius.sm,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    segmentButtonActive: {
-      backgroundColor: colors.surfaceCard,
-    },
-    segmentText: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize - 1,
-      fontWeight: "600",
-      lineHeight: Typography.body.lineHeight,
-    },
-    segmentTextActive: {
-      color: colors.text,
-      fontWeight: "700",
-    },
-    groupsGrid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: Spacing.sm,
-    },
-    groupCard: {
-      width: "48.5%",
-      backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.md,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: 6,
+      borderRadius: BorderRadius.full,
       borderWidth: 1,
       borderColor: colors.border,
-      padding: Spacing.md,
-      gap: Spacing.xs,
-      alignItems: "center",
+      backgroundColor: colors.surfaceCard,
     },
-    groupIcon: {
-      width: 42,
-      height: 42,
-      borderRadius: BorderRadius.full,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: isDark ? "#20352F" : "#E5F3EE",
+    toggleBtnActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
     },
-    groupTitle: {
-      color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize - 1,
-      fontWeight: "700",
-      lineHeight: Typography.body.lineHeight,
-      textAlign: "center",
-    },
-    groupCount: {
+    toggleText: {
       color: colors.textSecondary,
       fontFamily: Typography.family,
       fontSize: Typography.caption.fontSize + 1,
-      fontWeight: "600",
-      lineHeight: Typography.caption.lineHeight,
+      fontWeight: "700",
     },
-    emptyCard: {
-      backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.md,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: Spacing.lg,
+    toggleTextActive: {
+      color: colors.onPrimary,
+      fontWeight: "800",
+    },
+    manageBtn: {
+      flexDirection: "row",
       alignItems: "center",
-      gap: Spacing.xs,
+      gap: 4,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 6,
     },
-    emptyTitle: {
-      color: colors.text,
+    manageBtnText: {
+      color: colors.primary,
+      fontFamily: Typography.family,
+      fontSize: Typography.caption.fontSize + 1,
+      fontWeight: "700",
+    },
+    emptyWrap: {
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: Spacing.xxl,
+      gap: Spacing.md,
+    },
+    emptyText: {
+      color: colors.textSecondary,
       fontFamily: Typography.family,
       fontSize: Typography.body.fontSize,
-      fontWeight: "700",
-      lineHeight: Typography.body.lineHeight,
-    },
-    emptyBody: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
-      fontWeight: Typography.caption.fontWeight,
-      lineHeight: Typography.body.lineHeight,
       textAlign: "center",
+      maxWidth: 260,
     },
-    listWrap: {
-      gap: Spacing.sm,
-    },
-    plantCard: {
+    areaSection: {
       backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.md,
+      borderRadius: BorderRadius.lg,
       borderWidth: 1,
       borderColor: colors.border,
-      padding: Spacing.md,
-      gap: Spacing.sm,
+      overflow: "hidden",
     },
-    plantHeader: {
+    areaHeader: {
       flexDirection: "row",
       alignItems: "center",
       gap: Spacing.sm,
+      padding: Spacing.md,
     },
-    plantIconWrap: {
-      width: 40,
-      height: 40,
-      borderRadius: BorderRadius.full,
+    areaThumbWrap: {
+      width: 48,
+      height: 48,
+      borderRadius: BorderRadius.md,
       backgroundColor: colors.primary,
       alignItems: "center",
       justifyContent: "center",
+      overflow: "hidden",
     },
-    plantCopy: {
+    areaThumb: {
+      width: "100%",
+      height: "100%",
+    },
+    areaHeaderBody: {
       flex: 1,
-      gap: 2,
+      gap: 4,
+    },
+    areaHeaderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    areaName: {
+      flex: 1,
+      color: colors.text,
+      fontFamily: Typography.family,
+      fontSize: Typography.body.fontSize + 1,
+      fontWeight: "800",
+    },
+    areaMetaRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      flexWrap: "wrap",
+    },
+    areaMetaText: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: Typography.caption.fontSize,
+      fontWeight: "600",
+    },
+    areaMetaDot: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: Typography.caption.fontSize,
+    },
+    miniHealthBar: {
+      height: 4,
+      backgroundColor: isDark ? "#22332F" : "#E5F3EE",
+      borderRadius: 2,
+      overflow: "hidden",
+      marginTop: 4,
+    },
+    miniHealthFill: {
+      height: "100%",
+      backgroundColor: colors.primary,
+      borderRadius: 2,
+    },
+    areaPlantsList: {
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      paddingHorizontal: Spacing.sm,
+      paddingTop: Spacing.xs,
+      paddingBottom: Spacing.sm,
+      gap: Spacing.xs,
+    },
+    emptyAreaBlock: {
+      paddingVertical: Spacing.md,
+      alignItems: "center",
+    },
+    emptyAreaText: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: Typography.caption.fontSize + 1,
+      fontStyle: "italic",
+    },
+    editAreaLink: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 4,
+      paddingVertical: Spacing.xs,
+      marginTop: Spacing.xs,
+    },
+    editAreaLinkText: {
+      color: colors.primary,
+      fontFamily: Typography.family,
+      fontSize: Typography.caption.fontSize + 1,
+      fontWeight: "700",
+    },
+    noAreasHint: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      padding: Spacing.md,
+      backgroundColor: isDark ? "#1F3430" : "#E5F3EE",
+      borderRadius: BorderRadius.md,
+    },
+    noAreasHintText: {
+      flex: 1,
+      color: colors.text,
+      fontFamily: Typography.family,
+      fontSize: Typography.body.fontSize - 1,
+      fontWeight: "500",
+    },
+    plantRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      backgroundColor: colors.surfaceCard,
+      borderRadius: BorderRadius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: Spacing.sm,
+      paddingHorizontal: Spacing.sm,
+    },
+    plantRowCompact: {
+      borderWidth: 0,
+      borderRadius: BorderRadius.md,
+      paddingVertical: 6,
+      paddingHorizontal: Spacing.xs,
+      backgroundColor: "transparent",
+    },
+    plantPhotoWrap: {
+      width: 36,
+      height: 36,
+      borderRadius: BorderRadius.md,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+      overflow: "hidden",
+    },
+    plantPhoto: {
+      width: "100%",
+      height: "100%",
+    },
+    plantBody: {
+      flex: 1,
+      gap: 1,
     },
     plantName: {
       color: colors.text,
       fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize,
+      fontSize: Typography.body.fontSize - 1,
       fontWeight: "700",
-      lineHeight: Typography.body.lineHeight,
     },
-    plantScientificName: {
+    plantMeta: {
       color: colors.textSecondary,
       fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
-      fontWeight: Typography.caption.fontWeight,
-      lineHeight: Typography.body.lineHeight,
+      fontSize: Typography.caption.fontSize,
+      fontWeight: "500",
     },
-    editButton: {
-      width: 38,
-      height: 38,
-      borderRadius: BorderRadius.full,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: isDark ? "#1D2F2A" : "#EDF8F4",
+    rowAction: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
       alignItems: "center",
       justifyContent: "center",
     },
-    editButtonPressed: {
-      opacity: 0.8,
+    pressed: {
+      opacity: 0.5,
+      backgroundColor: isDark ? "#22332F" : "#EAF4F0",
     },
-    deleteButton: {
-      width: 38,
-      height: 38,
-      borderRadius: BorderRadius.full,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: isDark ? "#2C211F" : "#FFF3F1",
+    fab: {
+      position: "absolute",
+      right: Spacing.lg,
+      bottom: 100,
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: colors.primary,
       alignItems: "center",
       justifyContent: "center",
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.4,
+      shadowRadius: 12,
+      elevation: 10,
     },
-    deleteButtonPressed: {
-      opacity: 0.8,
-    },
-    metaRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: Spacing.xs,
-    },
-    metaChip: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
-      fontWeight: "600",
-      lineHeight: Typography.caption.lineHeight,
-      paddingHorizontal: Spacing.sm,
-      paddingVertical: Spacing.xs,
-      borderRadius: BorderRadius.full,
-      backgroundColor: isDark ? "#20352F" : "#E5F3EE",
-      overflow: "hidden",
+    fabPressed: {
+      opacity: 0.85,
     },
   });

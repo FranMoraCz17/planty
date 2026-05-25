@@ -45,6 +45,11 @@ export const plantFormSchema = z.object({
     .trim()
     .min(5, "Indica una frecuencia de riego valida.")
     .max(40, "La frecuencia de riego no debe superar 40 caracteres."),
+  notes: z
+    .string()
+    .trim()
+    .max(500, "Las notas no deben superar 500 caracteres.")
+    .optional(),
 });
 
 export type UserFormValues = z.infer<typeof userFormSchema>;
