@@ -1,4 +1,5 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import {
   Image,
   Pressable,
@@ -8,6 +9,7 @@ import {
 } from "react-native";
 import { useDemoData } from "@/src/data/DemoDataProvider";
 import {
+  BorderRadius,
   Spacing,
   Typography,
   type ThemeColors,
@@ -32,6 +34,7 @@ export default function AppHeader({
 }: AppHeaderProps) {
   const { colors, isDark } = useAppTheme();
   const { currentUser } = useDemoData();
+  const router = useRouter();
   const styles = createStyles(colors, isDark);
 
   const displayTitle = title ?? "Planty";
@@ -50,29 +53,48 @@ export default function AppHeader({
           </Text>
         ) : null}
       </View>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Abrir menu de cuenta"
-        onPress={onAvatarPress}
-        style={({ pressed }) => [
-          styles.avatarWrap,
-          pressed && styles.avatarPressed,
-        ]}
-      >
-        {currentUser?.avatarUrl ? (
-          <Image
-            source={{ uri: currentUser.avatarUrl }}
-            style={styles.avatarImage}
-            accessibilityIgnoresInvertColors
-          />
-        ) : (
-          <MaterialCommunityIcons
-            name="account-circle"
-            size={26}
-            color={colors.primary}
-          />
-        )}
-      </Pressable>
+      {/* Acciones rápidas en el header */}
+      <View style={styles.actionsRow}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Clínica de diagnósticos"
+          onPress={() => router.push("/(app)/clinic" as never)}
+          style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.7 }]}
+        >
+          <MaterialCommunityIcons name="stethoscope" size={20} color={colors.accentWarm} />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Mi Herbario"
+          onPress={() => router.push("/herbario" as never)}
+          style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.7 }]}
+        >
+          <MaterialCommunityIcons name="flask-outline" size={20} color={colors.primary} />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Abrir menu de cuenta"
+          onPress={onAvatarPress}
+          style={({ pressed }) => [
+            styles.avatarWrap,
+            pressed && styles.avatarPressed,
+          ]}
+        >
+          {currentUser?.avatarUrl ? (
+            <Image
+              source={{ uri: currentUser.avatarUrl }}
+              style={styles.avatarImage}
+              accessibilityIgnoresInvertColors
+            />
+          ) : (
+            <MaterialCommunityIcons
+              name="account-circle"
+              size={26}
+              color={colors.primary}
+            />
+          )}
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -106,6 +128,21 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontSize: Typography.caption.fontSize + 1,
       fontWeight: "600",
       lineHeight: Typography.caption.lineHeight + 2,
+    },
+    actionsRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.xs,
+    },
+    iconBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: BorderRadius.full,
+      backgroundColor: colors.surfaceCard,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: "center",
+      justifyContent: "center",
     },
     avatarWrap: {
       width: 42,

@@ -29,6 +29,13 @@ export type EditablePlantFields = Pick<
   areaId?: string | null;
   notes?: string;
   acquiredAt?: string | null;
+  photos?: string[];
+  aiAnalyzed?: boolean;
+  aiDescription?: string;
+  aiLight?: string;
+  aiLightDetail?: string;
+  aiWateringDetail?: string;
+  wateringFrequencyDays?: number | null;
 };
 
 interface UpdateOptions {
@@ -276,6 +283,12 @@ export function DemoDataProvider({ children }: { children: React.ReactNode }) {
         areaId: data.areaId ?? null,
         notes: data.notes,
         acquiredAt: data.acquiredAt ?? null,
+        aiAnalyzed: data.aiAnalyzed,
+        aiDescription: data.aiDescription,
+        aiLight: data.aiLight,
+        aiLightDetail: data.aiLightDetail,
+        aiWateringDetail: data.aiWateringDetail,
+        wateringFrequencyDays: data.wateringFrequencyDays,
       });
 
       const refreshedPlants = await getPlantsByUserFromFirestore(currentUserId);

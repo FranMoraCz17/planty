@@ -29,6 +29,9 @@ export interface AreaDocument {
   indoor: boolean;
   type: AreaType;
   zone: string;
+  locationLat?: number;
+  locationLng?: number;
+  areaSizeM2?: number;
   createdAt: string;
 }
 
@@ -62,6 +65,9 @@ export type UpdateAreaInput = Partial<
     | "indoor"
     | "type"
     | "zone"
+    | "locationLat"
+    | "locationLng"
+    | "areaSizeM2"
   >
 >;
 
@@ -75,6 +81,9 @@ interface FirestoreAreaDocument {
   indoor?: boolean;
   type?: string;
   zone?: string;
+  locationLat?: number;
+  locationLng?: number;
+  areaSizeM2?: number;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -129,6 +138,9 @@ const mapDocument = (id: string, raw: FirestoreAreaDocument): AreaDocument => ({
   indoor: Boolean(raw.indoor ?? true),
   type: normalizeType(raw.type),
   zone: raw.zone?.trim() ?? "",
+  locationLat: raw.locationLat,
+  locationLng: raw.locationLng,
+  areaSizeM2: raw.areaSizeM2,
   createdAt: raw.createdAt ?? new Date().toISOString(),
 });
 
@@ -171,6 +183,9 @@ const AreaService = {
         indoor: input.indoor,
         type: input.type,
         zone: input.zone?.trim() ?? "",
+        locationLat: input.locationLat,
+        locationLng: input.locationLng,
+        areaSizeM2: input.areaSizeM2,
         createdAt: new Date().toISOString(),
       };
       await setDoc(ref, payload);

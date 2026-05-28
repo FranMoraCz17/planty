@@ -8,10 +8,13 @@ export default function TabsLayout() {
       screenOptions={{ headerShown: false }}
     >
       <Tabs.Screen name="index" options={{ title: "Inicio" }} />
-      <Tabs.Screen name="my-plants" options={{ title: "Plantas" }} />
-      <Tabs.Screen name="identify" options={{ title: "" }} />
       <Tabs.Screen name="calendar" options={{ title: "Calendario" }} />
-      <Tabs.Screen name="diagnose" options={{ title: "Diagnostico" }} />
+      <Tabs.Screen name="identify" options={{ title: "" }} />
+      <Tabs.Screen name="collection" options={{ title: "Colección" }} />
+      <Tabs.Screen name="profile" options={{ title: "Perfil" }} />
+      <Tabs.Screen name="my-plants" options={{ href: null }} />
+      <Tabs.Screen name="areas" options={{ href: null }} />
+      <Tabs.Screen name="diagnose" options={{ href: null }} />
     </Tabs>
   );
 }

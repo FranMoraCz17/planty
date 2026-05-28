@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import TopBar from "@/src/components/layout/TopBar";
 import { useHideTabBar } from "@/src/hooks/useHideTabBar";
+import { useTabBarVisibility } from "@/src/components/layout/TabBarVisibilityContext";
 import {
   Alert,
   Image,
@@ -38,6 +39,34 @@ import { useAppTheme } from "@/src/theme/ThemeProvider";
 type ScreenState = "camera" | "identifying" | "result";
 type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
+// Convierte el texto de frecuencia de riego de Gemini a número de días.
+// Gemini devuelve cosas como "Cada 5 días", "Cada 7-10 días", "twice a week", etc.
+function parseWateringDays(text: string | null | undefined): number | null {
+  if (!text) return null;
+  const normalized = text.toLowerCase();
+
+  // "cada N días" / "every N days"
+  const exactMatch = normalized.match(/cada\s+(\d+)\s*d[íi]/i) ??
+    normalized.match(/every\s+(\d+)\s*day/i);
+  if (exactMatch) return parseInt(exactMatch[1], 10);
+
+  // "cada N-M días" — tomar el promedio
+  const rangeMatch = normalized.match(/cada\s+(\d+)[–\-](\d+)\s*d[íi]/i) ??
+    normalized.match(/every\s+(\d+)[–\-](\d+)\s*day/i);
+  if (rangeMatch) {
+    return Math.round((parseInt(rangeMatch[1], 10) + parseInt(rangeMatch[2], 10)) / 2);
+  }
+
+  // expresiones en inglés comunes
+  if (normalized.includes("twice a week") || normalized.includes("2 veces por semana")) return 3;
+  if (normalized.includes("once a week") || normalized.includes("1 vez por semana") || normalized.includes("semanal")) return 7;
+  if (normalized.includes("twice a month") || normalized.includes("quincenal")) return 15;
+  if (normalized.includes("once a month") || normalized.includes("mensual")) return 30;
+  if (normalized.includes("daily") || normalized.includes("diario")) return 1;
+
+  return null;
+}
+
 export default function IdentifyTab() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
@@ -56,6 +85,7 @@ export default function IdentifyTab() {
     toggleFlash,
   } = useCamera({ requestOnMount: true });
 
+  const { show: showTabBar } = useTabBarVisibility();
   const [screenState, setScreenState] = useState<ScreenState>("camera");
   const [result, setResult] = useState<PlantIdentifyResult | null>(null);
   const [lastPhotoUri, setLastPhotoUri] = useState<string | null>(null);
@@ -109,6 +139,12 @@ export default function IdentifyTab() {
         wateringFrequencyLabel: result.wateringFrequency || "Cada 7 días",
         photoUri: lastPhotoUri ?? undefined,
         areaId: selectedAreaId,
+        aiAnalyzed: true,
+        aiDescription: result.description || undefined,
+        aiLight: result.light || undefined,
+        aiLightDetail: result.lightDetail || undefined,
+        aiWateringDetail: result.wateringDetail || undefined,
+        wateringFrequencyDays: parseWateringDays(result.wateringFrequency),
       });
       Alert.alert(
         "Planta guardada",
@@ -116,7 +152,7 @@ export default function IdentifyTab() {
         [
           {
             text: "Ver mis plantas",
-            onPress: () => router.push("/(app)/(tabs)/my-plants"),
+            onPress: () => router.push("/(app)/(tabs)/collection"),
           },
         ],
       );
@@ -583,7 +619,7 @@ export default function IdentifyTab() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Cerrar camara"
-            onPress={() => router.replace("/(app)/(tabs)")}
+            onPress={() => { showTabBar(); router.replace("/(app)/(tabs)"); }}
             style={({ pressed }) => [
               styles.cameraControlBtn,
               pressed && { opacity: 0.7 },

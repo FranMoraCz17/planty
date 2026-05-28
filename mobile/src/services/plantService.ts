@@ -25,6 +25,15 @@ export interface PlantDocument {
   areaId?: string | null;
   notes?: string;
   acquiredAt?: string | null;
+  // Galería de fotos adicionales (la foto principal sigue en photoUri por retrocompatibilidad)
+  photos?: string[];
+  // Campos de análisis IA (opcionales — plantas manuales o del catálogo los tendrán vacíos)
+  aiAnalyzed?: boolean;
+  aiDescription?: string;
+  aiLight?: string;
+  aiLightDetail?: string;
+  aiWateringDetail?: string;
+  wateringFrequencyDays?: number | null;
 }
 
 export type CreatePlantInput = PlantDocument;
@@ -36,6 +45,13 @@ export type UpdatePlantInput = Pick<
   areaId?: string | null;
   notes?: string;
   acquiredAt?: string | null;
+  photos?: string[];
+  aiAnalyzed?: boolean;
+  aiDescription?: string;
+  aiLight?: string;
+  aiLightDetail?: string;
+  aiWateringDetail?: string;
+  wateringFrequencyDays?: number | null;
 };
 
 interface FirestorePlantDocument {
@@ -53,6 +69,13 @@ interface FirestorePlantDocument {
   areaId?: string | null;
   notes?: string;
   acquiredAt?: string | null;
+  photos?: string[];
+  aiAnalyzed?: boolean;
+  aiDescription?: string;
+  aiLight?: string;
+  aiLightDetail?: string;
+  aiWateringDetail?: string;
+  wateringFrequencyDays?: number | null;
 }
 
 const mapPlantDocument = (id: string, raw: FirestorePlantDocument): PlantDocument => ({
@@ -67,6 +90,13 @@ const mapPlantDocument = (id: string, raw: FirestorePlantDocument): PlantDocumen
   areaId: raw.areaId ?? null,
   notes: raw.notes ?? "",
   acquiredAt: raw.acquiredAt ?? null,
+  photos: raw.photos ?? [],
+  aiAnalyzed: raw.aiAnalyzed ?? false,
+  aiDescription: raw.aiDescription,
+  aiLight: raw.aiLight,
+  aiLightDetail: raw.aiLightDetail,
+  aiWateringDetail: raw.aiWateringDetail,
+  wateringFrequencyDays: raw.wateringFrequencyDays ?? null,
 });
 
 export async function getPlantsByUser(
@@ -118,9 +148,13 @@ export async function createPlant(data: CreatePlantInput): Promise<string> {
       ...(data.photoUri ? { photoUri: data.photoUri } : {}),
       ...(data.areaId ? { areaId: data.areaId } : {}),
       ...(data.notes !== undefined ? { notes: data.notes } : {}),
-      ...(data.acquiredAt !== undefined
-        ? { acquiredAt: data.acquiredAt }
-        : {}),
+      ...(data.acquiredAt !== undefined ? { acquiredAt: data.acquiredAt } : {}),
+      ...(data.aiAnalyzed !== undefined ? { aiAnalyzed: data.aiAnalyzed } : {}),
+      ...(data.aiDescription ? { aiDescription: data.aiDescription } : {}),
+      ...(data.aiLight ? { aiLight: data.aiLight } : {}),
+      ...(data.aiLightDetail ? { aiLightDetail: data.aiLightDetail } : {}),
+      ...(data.aiWateringDetail ? { aiWateringDetail: data.aiWateringDetail } : {}),
+      ...(data.wateringFrequencyDays != null ? { wateringFrequencyDays: data.wateringFrequencyDays } : {}),
     });
 
     return plantRef.id;
@@ -158,9 +192,14 @@ export async function updatePlantById(
       ...(data.photoUri !== undefined ? { photoUri: data.photoUri } : {}),
       ...(data.areaId !== undefined ? { areaId: data.areaId } : {}),
       ...(data.notes !== undefined ? { notes: data.notes } : {}),
-      ...(data.acquiredAt !== undefined
-        ? { acquiredAt: data.acquiredAt }
-        : {}),
+      ...(data.acquiredAt !== undefined ? { acquiredAt: data.acquiredAt } : {}),
+      ...(data.photos !== undefined ? { photos: data.photos } : {}),
+      ...(data.aiAnalyzed !== undefined ? { aiAnalyzed: data.aiAnalyzed } : {}),
+      ...(data.aiDescription !== undefined ? { aiDescription: data.aiDescription } : {}),
+      ...(data.aiLight !== undefined ? { aiLight: data.aiLight } : {}),
+      ...(data.aiLightDetail !== undefined ? { aiLightDetail: data.aiLightDetail } : {}),
+      ...(data.aiWateringDetail !== undefined ? { aiWateringDetail: data.aiWateringDetail } : {}),
+      ...(data.wateringFrequencyDays !== undefined ? { wateringFrequencyDays: data.wateringFrequencyDays } : {}),
     });
 
     const updatedPlant = await getPlantById(id);

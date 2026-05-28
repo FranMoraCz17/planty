@@ -24,20 +24,23 @@ const PILL_HORIZONTAL_INSET = 6;
 
 type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
+// Solo se renderizan las tabs con entrada en ICON_MAP — el resto queda invisible
+
+
 const ICON_MAP: Record<string, IconName> = {
   index: "home-variant",
-  "my-plants": "sprout",
+  collection: "sprout",
   identify: "leaf",
   calendar: "calendar-month",
-  diagnose: "stethoscope",
+  profile: "account-circle-outline",
 };
 
 const LABEL_MAP: Record<string, string> = {
   index: "Inicio",
-  "my-plants": "Plantas",
+  collection: "Colección",
   identify: "",
   calendar: "Calendario",
-  diagnose: "Diagnostico",
+  profile: "Perfil",
 };
 
 interface SlotLayout {
@@ -55,6 +58,8 @@ export default function AnimatedTabBar({
 
   const pillX = useRef(new Animated.Value(0)).current;
   const pillW = useRef(new Animated.Value(0)).current;
+  const scanScale = useRef(new Animated.Value(1)).current;
+  const scanRotate = useRef(new Animated.Value(0)).current;
 
   const activeIndex = state.index;
   const activeRoute = state.routes[activeIndex];
@@ -93,6 +98,18 @@ export default function AnimatedTabBar({
     };
 
   const goTo = (routeName: string, key: string, isFocused: boolean) => {
+    if (routeName === "identify") {
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(scanScale, { toValue: 1.25, duration: 150, easing: Easing.out(Easing.back(2)), useNativeDriver: true }),
+          Animated.timing(scanRotate, { toValue: 1, duration: 150, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(scanScale, { toValue: 1, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+          Animated.timing(scanRotate, { toValue: 0, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        ]),
+      ]).start();
+    }
     const event = navigation.emit({
       type: "tabPress",
       target: key,
@@ -102,6 +119,11 @@ export default function AnimatedTabBar({
       navigation.navigate(routeName as never);
     }
   };
+
+  const scanRotateInterpolated = scanRotate.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "30deg"],
+  });
 
   if (hidden) {
     return null;
@@ -154,8 +176,9 @@ export default function AnimatedTabBar({
 
       {/* Tabs sin overflow: hidden, para que el boton central pueda salir */}
       <View style={styles.tabsRow}>
-        {state.routes.map((route, index) => {
-          const isFocused = activeIndex === index;
+        {state.routes.filter((r) => r.name in ICON_MAP).map((route, index) => {
+          const realIndex = state.routes.findIndex((r) => r.key === route.key);
+          const isFocused = activeIndex === realIndex;
           const isCenter = route.name === "identify";
           const iconName = ICON_MAP[route.name] ?? "leaf";
           const label = LABEL_MAP[route.name] ?? "";
@@ -164,13 +187,13 @@ export default function AnimatedTabBar({
             return (
               <Pressable
                 key={route.key}
-                onLayout={handleLayout(index)}
+                onLayout={handleLayout(realIndex)}
                 accessibilityRole="button"
                 accessibilityLabel="Identificar planta"
                 onPress={() => goTo(route.name, route.key, isFocused)}
                 style={styles.centerSlot}
               >
-                <View
+                <Animated.View
                   style={[
                     styles.cameraButton,
                     {
@@ -179,6 +202,10 @@ export default function AnimatedTabBar({
                         : colors.primary,
                       borderColor: isDark ? "#0F0F0F" : "#FFFFFF",
                       shadowColor: colors.primary,
+                      transform: [
+                        { scale: scanScale },
+                        { rotate: scanRotateInterpolated },
+                      ],
                     },
                   ]}
                 >
@@ -187,7 +214,7 @@ export default function AnimatedTabBar({
                     size={28}
                     color={colors.onPrimary}
                   />
-                </View>
+                </Animated.View>
               </Pressable>
             );
           }
@@ -195,7 +222,7 @@ export default function AnimatedTabBar({
           return (
             <Pressable
               key={route.key}
-              onLayout={handleLayout(index)}
+              onLayout={handleLayout(realIndex)}
               accessibilityRole="button"
               accessibilityLabel={label}
               onPress={() => goTo(route.name, route.key, isFocused)}

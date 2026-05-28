@@ -223,6 +223,7 @@ export default function MyPlantsTab() {
               plant={plant}
               colors={colors}
               isDark={isDark}
+              onPress={() => router.push(`/(app)/plant/${plant.id}`)}
               onEdit={() => router.push(`/(app)/forms/plant?id=${plant.id}`)}
               onDelete={() => handleDelete(plant.id, plant.name)}
             />
@@ -239,6 +240,7 @@ export default function MyPlantsTab() {
                   plants={areaPlants}
                   expanded={expanded}
                   onToggle={() => toggleArea(area.id)}
+                  onViewPlant={(p) => router.push(`/(app)/plant/${p.id}`)}
                   onEditPlant={(p) =>
                     router.push(`/(app)/forms/plant?id=${p.id}`)
                   }
@@ -257,6 +259,7 @@ export default function MyPlantsTab() {
                 plants={plantsByAreaId.get("unassigned") ?? []}
                 expanded={expandedAreas.has("unassigned")}
                 onToggle={() => toggleArea("unassigned")}
+                onViewPlant={(p) => router.push(`/(app)/plant/${p.id}`)}
                 onEditPlant={(p) =>
                   router.push(`/(app)/forms/plant?id=${p.id}`)
                 }
@@ -338,6 +341,7 @@ function AreaSection({
   plants,
   expanded,
   onToggle,
+  onViewPlant,
   onEditPlant,
   onDeletePlant,
   onEditArea,
@@ -348,6 +352,7 @@ function AreaSection({
   plants: PlantDocument[];
   expanded: boolean;
   onToggle: () => void;
+  onViewPlant: (p: PlantDocument) => void;
   onEditPlant: (p: PlantDocument) => void;
   onDeletePlant: (p: PlantDocument) => void;
   onEditArea: () => void;
@@ -432,17 +437,14 @@ function AreaSection({
               </Text>
             </View>
           ) : (
-            plants.map((plant) => (
-              <PlantRow
-                key={plant.id}
-                plant={plant}
-                colors={colors}
-                isDark={isDark}
-                onEdit={() => onEditPlant(plant)}
-                onDelete={() => onDeletePlant(plant)}
-                compact
-              />
-            ))
+            <PlantGrid
+              plants={plants}
+              onViewPlant={onViewPlant}
+              onEditPlant={onEditPlant}
+              onDeletePlant={onDeletePlant}
+              colors={colors}
+              isDark={isDark}
+            />
           )}
           <Pressable
             accessibilityRole="button"
@@ -470,6 +472,7 @@ function UnassignedSection({
   plants,
   expanded,
   onToggle,
+  onViewPlant,
   onEditPlant,
   onDeletePlant,
   colors,
@@ -478,6 +481,7 @@ function UnassignedSection({
   plants: PlantDocument[];
   expanded: boolean;
   onToggle: () => void;
+  onViewPlant: (p: PlantDocument) => void;
   onEditPlant: (p: PlantDocument) => void;
   onDeletePlant: (p: PlantDocument) => void;
   colors: ThemeColors;
@@ -527,6 +531,7 @@ function UnassignedSection({
               plant={plant}
               colors={colors}
               isDark={isDark}
+              onPress={() => onViewPlant(plant)}
               onEdit={() => onEditPlant(plant)}
               onDelete={() => onDeletePlant(plant)}
               compact
@@ -538,10 +543,203 @@ function UnassignedSection({
   );
 }
 
+function PlantGridCell({
+  plant,
+  onPress,
+  onEdit,
+  onDelete,
+  colors,
+  isDark,
+}: {
+  plant: PlantDocument;
+  onPress: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  colors: ThemeColors;
+  isDark: boolean;
+}) {
+  const { photoUri } = usePlantPhoto({ scientificName: plant.scientificName });
+  const photo = plant.photoUri ?? photoUri;
+  const wateringDays = parseFrequencyDays(plant.wateringFrequencyLabel);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Ver ${plant.name}`}
+      onPress={onPress}
+      style={({ pressed }) => [
+        {
+          flex: 1,
+          aspectRatio: 3 / 4,
+          borderRadius: BorderRadius.lg,
+          overflow: "hidden",
+          backgroundColor: isDark ? "#1A1A1A" : "#E4E4E7",
+          opacity: pressed ? 0.88 : 1,
+        },
+      ]}
+    >
+      {photo ? (
+        <Image
+          source={{ uri: photo }}
+          style={{ width: "100%", height: "100%", resizeMode: "cover" }}
+        />
+      ) : (
+        <View
+          style={{
+            flex: 1,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: isDark ? "#143018" : "#DCFCE7",
+          }}
+        >
+          <MaterialCommunityIcons name="leaf" size={32} color={colors.primary} />
+        </View>
+      )}
+
+      {/* Gradient overlay */}
+      <View
+        style={{
+          ...StyleSheet.absoluteFillObject,
+          backgroundColor: "transparent",
+          justifyContent: "flex-end",
+        }}
+        pointerEvents="none"
+      >
+        <View
+          style={{
+            padding: Spacing.sm,
+            paddingTop: Spacing.xl,
+            backgroundColor: "rgba(0,0,0,0.55)",
+          }}
+        >
+          <Text
+            style={{
+              color: "#fff",
+              fontFamily: Typography.family,
+              fontSize: 12,
+              fontWeight: "800",
+              letterSpacing: -0.2,
+            }}
+            numberOfLines={1}
+          >
+            {plant.name}
+          </Text>
+          {wateringDays ? (
+            <Text
+              style={{
+                color: "rgba(255,255,255,0.75)",
+                fontFamily: Typography.family,
+                fontSize: 10,
+                fontWeight: "600",
+                marginTop: 1,
+              }}
+              numberOfLines={1}
+            >
+              Riego c/{wateringDays}d
+            </Text>
+          ) : null}
+        </View>
+      </View>
+
+      {/* Acciones rápidas — aparecen en esquina superior derecha */}
+      <View
+        style={{
+          position: "absolute",
+          top: 6,
+          right: 6,
+          flexDirection: "row",
+          gap: 4,
+        }}
+        pointerEvents="box-none"
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Editar ${plant.name}`}
+          onPress={onEdit}
+          hitSlop={6}
+          style={({ pressed }) => ({
+            width: 28,
+            height: 28,
+            borderRadius: 14,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            alignItems: "center" as const,
+            justifyContent: "center" as const,
+            opacity: pressed ? 0.7 : 1,
+          })}
+        >
+          <MaterialCommunityIcons name="pencil-outline" size={13} color="#fff" />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Eliminar ${plant.name}`}
+          onPress={onDelete}
+          hitSlop={6}
+          style={({ pressed }) => ({
+            width: 28,
+            height: 28,
+            borderRadius: 14,
+            backgroundColor: "rgba(0,0,0,0.55)",
+            alignItems: "center" as const,
+            justifyContent: "center" as const,
+            opacity: pressed ? 0.7 : 1,
+          })}
+        >
+          <MaterialCommunityIcons name="trash-can-outline" size={13} color="#fff" />
+        </Pressable>
+      </View>
+    </Pressable>
+  );
+}
+
+function PlantGrid({
+  plants,
+  onViewPlant,
+  onEditPlant,
+  onDeletePlant,
+  colors,
+  isDark,
+}: {
+  plants: PlantDocument[];
+  onViewPlant: (p: PlantDocument) => void;
+  onEditPlant: (p: PlantDocument) => void;
+  onDeletePlant: (p: PlantDocument) => void;
+  colors: ThemeColors;
+  isDark: boolean;
+}) {
+  // Agrupa en filas de 2
+  const rows: PlantDocument[][] = [];
+  for (let i = 0; i < plants.length; i += 2) {
+    rows.push(plants.slice(i, i + 2));
+  }
+
+  return (
+    <View style={{ gap: Spacing.xs }}>
+      {rows.map((row, rowIdx) => (
+        <View key={rowIdx} style={{ flexDirection: "row", gap: Spacing.xs }}>
+          {row.map((plant) => (
+            <PlantGridCell
+              key={plant.id}
+              plant={plant}
+              onPress={() => onViewPlant(plant)}
+              onEdit={() => onEditPlant(plant)}
+              onDelete={() => onDeletePlant(plant)}
+              colors={colors}
+              isDark={isDark}
+            />
+          ))}
+          {/* Si la fila tiene solo 1 planta, rellena con espacio */}
+          {row.length === 1 && <View style={{ flex: 1 }} />}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function PlantRow({
   plant,
   colors,
   isDark,
+  onPress,
   onEdit,
   onDelete,
   compact = false,
@@ -549,6 +747,7 @@ function PlantRow({
   plant: PlantDocument;
   colors: ThemeColors;
   isDark: boolean;
+  onPress: () => void;
   onEdit: () => void;
   onDelete: () => void;
   compact?: boolean;
@@ -559,7 +758,16 @@ function PlantRow({
   });
 
   return (
-    <View style={[styles.plantRow, compact && styles.plantRowCompact]}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Ver detalle de ${plant.name}`}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.plantRow,
+        compact && styles.plantRowCompact,
+        pressed && { opacity: 0.85 },
+      ]}
+    >
       <View style={styles.plantPhotoWrap}>
         {photoUri ? (
           <Image source={{ uri: photoUri }} style={styles.plantPhoto} />
@@ -603,7 +811,7 @@ function PlantRow({
           color={colors.textSecondary}
         />
       </Pressable>
-    </View>
+    </Pressable>
   );
 }
 

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { signOut } from "firebase/auth";
@@ -23,14 +23,19 @@ import {
   type ThemeColors,
 } from "@/src/theme/designSystem";
 import { useAppTheme } from "@/src/theme/ThemeProvider";
-import ThemedButton from "@/src/components/ui/ThemedButton";
 
-type CollectionView = "plantas" | "sitios";
+function parseFrequencyDays(label: string | undefined): number | null {
+  if (!label) return null;
+  const match = label.match(/(\d+)/);
+  if (!match) return null;
+  const days = parseInt(match[1], 10);
+  return Number.isFinite(days) && days > 0 ? days : null;
+}
 
 export default function UserProfile() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
-  const { currentUser, currentUserId, getPlantsByUser, refreshCurrentUser } =
+  const { currentUser, currentUserId, getPlantsByUser, areas, refreshCurrentUser } =
     useDemoData();
   const styles = createStyles(colors, isDark);
 
@@ -42,43 +47,32 @@ export default function UserProfile() {
       },
     });
 
-  const [collectionView, setCollectionView] = useState<CollectionView>("plantas");
   const plants = getPlantsByUser(currentUserId);
-  const uniqueSites = useMemo(
-    () => Array.from(new Set(plants.map((plant) => plant.locationName))),
+
+  const healthPct = useMemo(() => {
+    if (plants.length === 0) return 0;
+    const analyzed = plants.filter((p) => p.aiAnalyzed).length;
+    return Math.round((analyzed / plants.length) * 100);
+  }, [plants]);
+
+  const withoutWatering = useMemo(
+    () => plants.filter((p) => parseFrequencyDays(p.wateringFrequencyLabel) === null).length,
     [plants],
   );
-
-  const siteMetadata: Record<string, { luz: string; humedad: string }> = {
-    "Patio trasero": { luz: "Sol parcial", humedad: "Alta" },
-    "Sala principal": { luz: "Luz filtrada", humedad: "Media" },
-    Cocina: { luz: "Luz indirecta", humedad: "Media" },
-    "Sala norte": { luz: "Luz brillante", humedad: "Media" },
-    Dormitorio: { luz: "Luz suave", humedad: "Media" },
-  };
-
-  const mySites = uniqueSites.map((siteName, index) => ({
-    id: `site-${index}`,
-    nombre: siteName,
-    luz: siteMetadata[siteName]?.luz ?? "Luz variable",
-    humedad: siteMetadata[siteName]?.humedad ?? "Media",
-  }));
-
-  const highlightedPlant = plants[0] ?? null;
 
   if (!currentUser) {
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.content}>
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyStateTitle}>No hay datos de perfil disponibles</Text>
-            <Text style={styles.emptyStateBody}>La capa de datos no encontro un usuario inicial.</Text>
-          </View>
-          <ThemedButton
-            label="Cerrar sesion"
+        <View style={styles.centered}>
+          <Text style={styles.emptyTitle}>Sin datos de perfil</Text>
+          <Pressable
+            accessibilityRole="button"
             accessibilityLabel="Cerrar sesion"
             onPress={() => void signOut(auth)}
-          />
+            style={({ pressed }) => [styles.signOutBtn, pressed && { opacity: 0.75 }]}
+          >
+            <Text style={styles.signOutBtnText}>Cerrar sesión</Text>
+          </Pressable>
         </View>
       </SafeAreaView>
     );
@@ -87,215 +81,169 @@ export default function UserProfile() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.headerTitle}>Perfil</Text>
-            <Text style={styles.headerSubtitle}>Resumen de cuenta y coleccion</Text>
+
+        {/* Hero — foto grande con gradiente y nombre flotando */}
+        <View style={styles.heroWrap}>
+          {currentUser.avatarUrl ? (
+            <Image
+              source={{ uri: currentUser.avatarUrl }}
+              style={styles.heroPhoto}
+              accessibilityIgnoresInvertColors
+            />
+          ) : (
+            <View style={[styles.heroPhoto, styles.heroPhotoPlaceholder]}>
+              <MaterialCommunityIcons name="account-circle-outline" size={80} color="rgba(255,255,255,0.5)" />
+            </View>
+          )}
+
+          <View style={styles.heroGradient} />
+
+          {/* Nombre e identidad flotando sobre el gradiente */}
+          <View style={styles.heroIdentity}>
+            <Text style={styles.heroName}>{currentUser.name}</Text>
+            <Text style={styles.heroUsername}>@{currentUser.username}</Text>
           </View>
+
+          {/* Boton cambiar foto */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Cambiar foto de perfil"
+            onPress={() => void changePhoto()}
+            disabled={isUploading}
+            style={({ pressed }) => [styles.heroEditPhotoBtn, pressed && { opacity: 0.7 }]}
+          >
+            {isUploading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <MaterialCommunityIcons name="camera-outline" size={16} color="#fff" />
+            )}
+          </Pressable>
+
+          {/* Settings arriba a la derecha */}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Abrir ajustes"
             onPress={() => router.push("/(app)/settings")}
-            style={({ pressed }) => [styles.settingsButton, pressed && styles.settingsButtonPressed]}
+            style={({ pressed }) => [styles.heroSettingsBtn, pressed && { opacity: 0.7 }]}
           >
-            <MaterialCommunityIcons name="cog-outline" size={18} color={colors.onPrimary} />
-            <Text style={styles.settingsButtonText}>Ajustes</Text>
+            <MaterialCommunityIcons name="cog-outline" size={18} color="#fff" />
+          </Pressable>
+
+          {/* Herbario — libro arriba a la izquierda */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Ver mi herbario"
+            onPress={() => router.push("/herbario" as never)}
+            style={({ pressed }) => [styles.heroHerbariumBtn, pressed && { opacity: 0.7 }]}
+          >
+            <MaterialCommunityIcons name="book-open-page-variant-outline" size={18} color="#fff" />
           </Pressable>
         </View>
 
-        <View style={styles.heroCard}>
-          {photoError && (
-            <FormNotice
-              variant="error"
-              title="No se pudo cambiar la foto"
-              message={photoError}
-              onDismiss={resetError}
-            />
-          )}
-          <View style={styles.heroTop}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Cambiar foto de perfil"
-              onPress={() => void changePhoto()}
-              disabled={isUploading}
-              style={({ pressed }) => [
-                styles.avatarWrap,
-                pressed && !isUploading && styles.avatarPressed,
-              ]}
-            >
-              {currentUser.avatarUrl ? (
-                <Image
-                  source={{ uri: currentUser.avatarUrl }}
-                  style={styles.avatarImage}
-                  accessibilityIgnoresInvertColors
-                />
-              ) : (
-                <MaterialCommunityIcons
-                  name="account-outline"
-                  size={30}
-                  color={colors.onPrimary}
-                />
-              )}
-              {isUploading ? (
-                <View style={styles.avatarOverlay}>
-                  <ActivityIndicator color={colors.onPrimary} />
-                </View>
-              ) : (
-                <View style={styles.avatarBadge}>
-                  <MaterialCommunityIcons
-                    name="camera-outline"
-                    size={14}
-                    color={colors.onPrimary}
-                  />
-                </View>
-              )}
-            </Pressable>
-            <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>{currentUser.name}</Text>
-              <Text style={styles.profileAlias}>@{currentUser.username}</Text>
-              <View style={styles.infoRow}>
-                <MaterialCommunityIcons name="email-outline" size={14} color={colors.textSecondary} />
-                <Text style={styles.infoText}>{currentUser.email}</Text>
-              </View>
-              <View style={styles.infoRow}>
-                <MaterialCommunityIcons name="map-marker-outline" size={14} color={colors.textSecondary} />
-                <Text style={styles.infoText}>{currentUser.city}</Text>
-              </View>
-            </View>
-          </View>
-          <View style={styles.quickActionsRow}>
-            <ThemedButton
-              accessibilityLabel="Editar perfil"
-              label="Editar perfil"
-              onPress={() => router.push("/(app)/forms/user")}
-              style={styles.primaryAction}
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Agregar planta"
-              onPress={() => router.push("/(app)/forms/plant?mode=create")}
-              style={({ pressed }) => [
-                styles.secondaryAction,
-                pressed && styles.secondaryActionPressed,
-              ]}
-            >
-              <MaterialCommunityIcons name="plus" size={18} color={colors.primary} />
-              <Text style={styles.secondaryActionText}>Agregar planta</Text>
-            </Pressable>
-          </View>
+        {photoError && (
+          <FormNotice
+            variant="error"
+            title="No se pudo cambiar la foto"
+            message={photoError}
+            onDismiss={resetError}
+          />
+        )}
+
+        {/* Acciones rápidas */}
+        <View style={styles.actionsRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Editar perfil"
+            onPress={() => router.push("/(app)/forms/user")}
+            style={({ pressed }) => [styles.actionBtnPrimary, pressed && { opacity: 0.85 }]}
+          >
+            <MaterialCommunityIcons name="pencil-outline" size={15} color={colors.onPrimary} />
+            <Text style={styles.actionBtnPrimaryText}>Editar perfil</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Agregar planta"
+            onPress={() => router.push("/(app)/forms/plant?mode=create")}
+            style={({ pressed }) => [styles.actionBtnSecondary, pressed && { opacity: 0.85 }]}
+          >
+            <MaterialCommunityIcons name="plus" size={15} color={colors.primary} />
+            <Text style={styles.actionBtnSecondaryText}>Agregar planta</Text>
+          </Pressable>
         </View>
 
+        {/* Stats reales */}
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Text style={styles.statValue}>{plants.length}</Text>
             <Text style={styles.statLabel}>Plantas</Text>
           </View>
+          <View style={styles.statDivider} />
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>{mySites.length}</Text>
-            <Text style={styles.statLabel}>Sitios</Text>
+            <Text style={styles.statValue}>{areas.length}</Text>
+            <Text style={styles.statLabel}>Areas</Text>
           </View>
+          <View style={styles.statDivider} />
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>{currentUser.pendingCount}</Text>
-            <Text style={styles.statLabel}>Pendientes</Text>
+            <Text style={styles.statValue}>{healthPct}%</Text>
+            <Text style={styles.statLabel}>Analizadas</Text>
           </View>
         </View>
 
-        <View style={styles.highlightCard}>
-          <Text style={styles.cardTitle}>Estado actual</Text>
-          {highlightedPlant ? (
-            <>
-              <Text style={styles.highlightTitle}>{highlightedPlant.name}</Text>
-              <Text style={styles.highlightBody}>
-                Ubicada en {highlightedPlant.locationName} con riego {highlightedPlant.wateringFrequencyLabel.toLowerCase()}.
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Editar ${highlightedPlant.name}`}
-                onPress={() => router.push(`/(app)/forms/plant?id=${highlightedPlant.id}`)}
-                style={({ pressed }) => [
-                  styles.inlineAction,
-                  pressed && styles.inlineActionPressed,
-                ]}
-              >
-                <MaterialCommunityIcons name="pencil-outline" size={16} color={colors.primary} />
-                <Text style={styles.inlineActionText}>Editar planta destacada</Text>
-              </Pressable>
-            </>
-          ) : (
-            <>
-              <Text style={styles.highlightTitle}>Coleccion lista para completar</Text>
-              <Text style={styles.highlightBody}>
-                Agrega una planta nueva para mostrar historial y ubicaciones dentro del perfil.
-              </Text>
-            </>
-          )}
-        </View>
-
-        <View style={styles.segmentWrap}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Ver plantas"
-            onPress={() => setCollectionView("plantas")}
-            style={[styles.segmentButton, collectionView === "plantas" && styles.segmentButtonActive]}
-          >
-            <Text style={[styles.segmentText, collectionView === "plantas" && styles.segmentTextActive]}>
-              Plantas
-            </Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Ver sitios"
-            onPress={() => setCollectionView("sitios")}
-            style={[styles.segmentButton, collectionView === "sitios" && styles.segmentButtonActive]}
-          >
-            <Text style={[styles.segmentText, collectionView === "sitios" && styles.segmentTextActive]}>
-              Sitios
-            </Text>
-          </Pressable>
-        </View>
-
-        {collectionView === "plantas" ? (
-          <View style={styles.listWrap}>
-            {plants.map((plant) => (
-              <View key={plant.id} style={styles.itemCard}>
-                <View style={styles.itemIcon}>
-                  <MaterialCommunityIcons name="leaf" size={18} color={colors.onPrimary} />
-                </View>
-                <View style={styles.itemContent}>
-                  <Text style={styles.itemTitle}>{plant.name}</Text>
-                  <Text style={styles.itemSubtitle}>{plant.scientificName}</Text>
-                  <View style={styles.metaRow}>
-                    <Text style={styles.metaChip}>{plant.locationName}</Text>
-                    <Text style={styles.metaChip}>{plant.wateringFrequencyLabel}</Text>
-                  </View>
-                </View>
-                <Pressable
-                  accessibilityLabel={`Editar ${plant.name}`}
-                  accessibilityRole="button"
-                  onPress={() => router.push(`/(app)/forms/plant?id=${plant.id}`)}
-                  style={({ pressed }) => [styles.inlineEditButton, pressed && styles.inlineEditButtonPressed]}
-                >
-                  <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.textSecondary} />
-                </Pressable>
+        {/* Salud de coleccion */}
+        {plants.length > 0 && (
+          <View style={styles.healthCard}>
+            <View style={styles.healthHeader}>
+              <Text style={styles.healthTitle}>Salud de la colección</Text>
+              <Text style={styles.healthPct}>{healthPct}%</Text>
+            </View>
+            <View style={styles.healthBarWrap}>
+              <View style={[styles.healthBarFill, { width: `${healthPct}%` as `${number}%` }]} />
+            </View>
+            <View style={styles.healthMeta}>
+              <View style={styles.healthChip}>
+                <MaterialCommunityIcons name="leaf-circle" size={12} color={colors.primary} />
+                <Text style={styles.healthChipText}>{plants.filter((p) => p.aiAnalyzed).length} analizadas</Text>
               </View>
-            ))}
-          </View>
-        ) : (
-          <View style={styles.listWrap}>
-            {mySites.map((site) => (
-              <View key={site.id} style={styles.itemCard}>
-                <View style={[styles.itemIcon, styles.siteIcon]}>
-                  <MaterialCommunityIcons name="home-floor-1" size={18} color={colors.onPrimary} />
+              {withoutWatering > 0 && (
+                <View style={[styles.healthChip, styles.healthChipWarn]}>
+                  <MaterialCommunityIcons name="water-off-outline" size={12} color={colors.accentWarm} />
+                  <Text style={[styles.healthChipText, { color: colors.accentWarm }]}>{withoutWatering} sin riego</Text>
                 </View>
-                <View style={styles.itemContent}>
-                  <Text style={styles.itemTitle}>{site.nombre}</Text>
-                  <Text style={styles.itemSubtitle}>Luz: {site.luz}</Text>
-                  <Text style={styles.metaText}>Humedad: {site.humedad}</Text>
-                </View>
-              </View>
-            ))}
+              )}
+            </View>
           </View>
         )}
+
+        {/* Card Herbario — placeholder para paso 4 */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Ver mi herbario"
+          onPress={() => router.push("/herbario" as never)}
+          style={({ pressed }) => [styles.herbariumCard, pressed && { opacity: 0.88 }]}
+        >
+          <View style={styles.herbariumLeft}>
+            <View style={styles.herbariumIconWrap}>
+              <MaterialCommunityIcons name="book-open-page-variant-outline" size={22} color={colors.onPrimary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.herbariumTitle}>Mi Herbario</Text>
+              <Text style={styles.herbariumSubtitle}>Fichas botánicas de tus especies</Text>
+            </View>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
+        </Pressable>
+
+        {/* Cerrar sesion */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Cerrar sesion"
+          onPress={() => void signOut(auth)}
+          style={({ pressed }) => [styles.signOutBtn, pressed && { opacity: 0.75 }]}
+        >
+          <MaterialCommunityIcons name="logout" size={16} color={colors.error} />
+          <Text style={styles.signOutBtnText}>Cerrar sesión</Text>
+        </Pressable>
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -307,374 +255,291 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       flex: 1,
       backgroundColor: colors.surface,
     },
-    content: {
-      padding: Spacing.lg,
-      gap: Spacing.md,
-      paddingBottom: Spacing.xxl,
-    },
-    headerTop: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      gap: Spacing.md,
-    },
-    headerTitle: {
-      color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: Typography.title.fontSize - 4,
-      fontWeight: Typography.title.fontWeight,
-      lineHeight: Typography.title.lineHeight,
-    },
-    headerSubtitle: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
-      fontWeight: "600",
-      lineHeight: Typography.caption.lineHeight,
-    },
-    settingsButton: {
-      minHeight: 42,
-      borderRadius: BorderRadius.full,
-      backgroundColor: colors.primary,
+    centered: {
+      flex: 1,
       alignItems: "center",
       justifyContent: "center",
-      flexDirection: "row",
-      gap: 6,
-      paddingHorizontal: Spacing.md,
+      gap: Spacing.lg,
     },
-    settingsButtonPressed: {
-      backgroundColor: colors.pressed,
-    },
-    settingsButtonText: {
-      color: colors.onPrimary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
-      fontWeight: "700",
-      lineHeight: Typography.caption.lineHeight,
-    },
-    emptyState: {
-      backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: Spacing.md,
-      gap: Spacing.sm,
-    },
-    emptyStateTitle: {
-      color: colors.text,
+    emptyTitle: {
+      color: colors.textSecondary,
       fontFamily: Typography.family,
       fontSize: Typography.body.fontSize,
-      fontWeight: "700",
-      lineHeight: Typography.body.lineHeight,
+      fontWeight: "600",
     },
-    emptyStateBody: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
-      fontWeight: Typography.caption.fontWeight,
-      lineHeight: Typography.caption.lineHeight,
-    },
-    heroCard: {
-      backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: Spacing.lg,
+    content: {
+      paddingBottom: 120,
       gap: Spacing.md,
-      shadowColor: "#000000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: isDark ? 0.2 : 0.08,
-      shadowRadius: 8,
-      elevation: 2,
     },
-    heroTop: {
-      flexDirection: "row",
-      gap: Spacing.md,
-      alignItems: "center",
-    },
-    avatarWrap: {
-      width: 82,
-      height: 82,
-      borderRadius: 41,
-      backgroundColor: colors.primary,
-      alignItems: "center",
-      justifyContent: "center",
-      overflow: "hidden",
+    heroWrap: {
+      width: "100%",
+      height: 300,
+      backgroundColor: isDark ? "#0F1A0F" : "#1A2E1A",
       position: "relative",
     },
-    avatarPressed: {
-      opacity: 0.85,
-    },
-    avatarImage: {
+    heroPhoto: {
       width: "100%",
       height: "100%",
+      resizeMode: "cover",
     },
-    avatarOverlay: {
-      position: "absolute",
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: "rgba(0,0,0,0.45)",
+    heroPhotoPlaceholder: {
       alignItems: "center",
       justifyContent: "center",
+      backgroundColor: isDark ? "#1A2E1A" : "#2D4A2D",
     },
-    avatarBadge: {
+    heroGradient: {
+      ...StyleSheet.absoluteFillObject,
+    },
+    heroIdentity: {
       position: "absolute",
-      bottom: 2,
-      right: 2,
-      width: 24,
-      height: 24,
-      borderRadius: 12,
-      backgroundColor: colors.primary,
-      borderWidth: 2,
-      borderColor: colors.surfaceCard,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    profileInfo: {
-      flex: 1,
-      gap: 3,
-    },
-    profileName: {
-      color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize + 4,
-      fontWeight: "700",
-      lineHeight: Typography.body.lineHeight + 2,
-    },
-    profileAlias: {
-      color: colors.primary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 2,
-      fontWeight: "700",
-      lineHeight: Typography.caption.lineHeight,
-    },
-    infoRow: {
-      flexDirection: "row",
-      alignItems: "center",
+      bottom: Spacing.lg,
+      left: Spacing.lg,
+      right: Spacing.lg,
       gap: 4,
-      marginTop: 2,
     },
-    infoText: {
-      color: colors.textSecondary,
+    heroName: {
+      color: "#FFFFFF",
       fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
-      fontWeight: "600",
-      lineHeight: Typography.caption.lineHeight,
+      fontSize: 28,
+      fontWeight: "800",
+      letterSpacing: -0.5,
+      textShadowColor: "rgba(0,0,0,0.5)",
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 4,
     },
-    quickActionsRow: {
+    heroUsername: {
+      color: "rgba(255,255,255,0.75)",
+      fontFamily: Typography.family,
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    heroEditPhotoBtn: {
+      position: "absolute",
+      bottom: Spacing.lg,
+      right: Spacing.lg,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.2)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    heroSettingsBtn: {
+      position: "absolute",
+      top: Spacing.lg,
+      right: Spacing.lg,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.2)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    heroHerbariumBtn: {
+      position: "absolute",
+      top: Spacing.lg,
+      left: Spacing.lg,
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.2)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    actionsRow: {
       flexDirection: "row",
       gap: Spacing.sm,
+      paddingHorizontal: Spacing.lg,
     },
-    primaryAction: {
+    actionBtnPrimary: {
       flex: 1,
-    },
-    secondaryAction: {
-      flex: 1,
-      minHeight: 48,
-      borderRadius: BorderRadius.md,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: isDark ? "#1D2F2A" : "#EDF8F4",
+      flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
+      gap: 6,
+      backgroundColor: colors.primary,
+      borderRadius: BorderRadius.full,
+      paddingVertical: Spacing.md,
+    },
+    actionBtnPrimaryText: {
+      color: colors.onPrimary,
+      fontFamily: Typography.family,
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    actionBtnSecondary: {
+      flex: 1,
       flexDirection: "row",
-      gap: 8,
-      paddingHorizontal: Spacing.md,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: BorderRadius.full,
+      paddingVertical: Spacing.md,
+      backgroundColor: colors.surfaceCard,
     },
-    secondaryActionPressed: {
-      opacity: 0.85,
-    },
-    secondaryActionText: {
+    actionBtnSecondaryText: {
       color: colors.primary,
       fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize - 1,
+      fontSize: 14,
       fontWeight: "700",
-      lineHeight: Typography.body.lineHeight,
     },
     statsRow: {
       flexDirection: "row",
-      gap: Spacing.sm,
-    },
-    statCard: {
-      flex: 1,
+      alignItems: "center",
+      marginHorizontal: Spacing.lg,
       backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.md,
+      borderRadius: BorderRadius.lg,
       borderWidth: 1,
       borderColor: colors.border,
       paddingVertical: Spacing.md,
+    },
+    statCard: {
+      flex: 1,
       alignItems: "center",
       gap: 2,
     },
+    statDivider: {
+      width: 1,
+      height: 32,
+      backgroundColor: colors.border,
+    },
     statValue: {
-      color: colors.primary,
+      color: colors.text,
       fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize + 4,
-      fontWeight: "700",
-      lineHeight: Typography.body.lineHeight,
+      fontSize: 22,
+      fontWeight: "800",
+      letterSpacing: -0.3,
     },
     statLabel: {
       color: colors.textSecondary,
       fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
+      fontSize: Typography.caption.fontSize,
       fontWeight: "600",
-      lineHeight: Typography.caption.lineHeight,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
     },
-    highlightCard: {
+    healthCard: {
+      marginHorizontal: Spacing.lg,
       backgroundColor: colors.surfaceCard,
       borderRadius: BorderRadius.lg,
       borderWidth: 1,
       borderColor: colors.border,
-      padding: Spacing.lg,
+      padding: Spacing.md,
       gap: Spacing.sm,
     },
-    cardTitle: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
-      fontWeight: "700",
-      lineHeight: Typography.caption.lineHeight,
-      textTransform: "uppercase",
+    healthHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
     },
-    highlightTitle: {
+    healthTitle: {
       color: colors.text,
       fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize + 3,
+      fontSize: 14,
       fontWeight: "700",
-      lineHeight: Typography.body.lineHeight + 2,
     },
-    highlightBody: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize - 1,
-      fontWeight: Typography.body.fontWeight,
-      lineHeight: Typography.body.lineHeight,
-    },
-    inlineAction: {
-      marginTop: Spacing.xs,
-      alignSelf: "flex-start",
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      paddingHorizontal: Spacing.sm,
-      paddingVertical: Spacing.xs,
-      borderRadius: BorderRadius.full,
-      backgroundColor: isDark ? "#20352F" : "#E5F3EE",
-    },
-    inlineActionPressed: {
-      opacity: 0.85,
-    },
-    inlineActionText: {
+    healthPct: {
       color: colors.primary,
       fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
-      fontWeight: "700",
-      lineHeight: Typography.caption.lineHeight,
+      fontSize: 16,
+      fontWeight: "800",
     },
-    segmentWrap: {
-      backgroundColor: isDark ? "#20352F" : "#DFF0EA",
-      borderRadius: BorderRadius.md,
-      padding: 4,
+    healthBarWrap: {
+      height: 6,
+      backgroundColor: isDark ? "#22332F" : "#E5F3EE",
+      borderRadius: 3,
+      overflow: "hidden",
+    },
+    healthBarFill: {
+      height: "100%",
+      backgroundColor: colors.primary,
+      borderRadius: 3,
+    },
+    healthMeta: {
       flexDirection: "row",
-      gap: 4,
+      flexWrap: "wrap",
+      gap: Spacing.xs,
     },
-    segmentButton: {
-      flex: 1,
-      minHeight: 40,
-      borderRadius: BorderRadius.sm,
+    healthChip: {
+      flexDirection: "row",
       alignItems: "center",
-      justifyContent: "center",
+      gap: 4,
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 4,
+      borderRadius: BorderRadius.full,
+      backgroundColor: isDark ? "#143018" : "#DCFCE7",
     },
-    segmentButtonActive: {
-      backgroundColor: colors.surfaceCard,
+    healthChipWarn: {
+      backgroundColor: isDark ? "#241D0E" : "#FEF3C7",
     },
-    segmentText: {
-      color: colors.textSecondary,
+    healthChipText: {
+      color: colors.primary,
       fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize - 1,
-      fontWeight: "600",
-      lineHeight: Typography.body.lineHeight,
-    },
-    segmentTextActive: {
-      color: colors.text,
+      fontSize: 11,
       fontWeight: "700",
     },
-    listWrap: {
-      gap: Spacing.sm,
-    },
-    itemCard: {
+    herbariumCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginHorizontal: Spacing.lg,
       backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.md,
+      borderRadius: BorderRadius.lg,
       borderWidth: 1,
       borderColor: colors.border,
       padding: Spacing.md,
+    },
+    herbariumLeft: {
       flexDirection: "row",
       alignItems: "center",
       gap: Spacing.sm,
+      flex: 1,
     },
-    itemIcon: {
-      width: 42,
-      height: 42,
-      borderRadius: 21,
+    herbariumIconWrap: {
+      width: 44,
+      height: 44,
+      borderRadius: BorderRadius.md,
       backgroundColor: colors.primary,
       alignItems: "center",
       justifyContent: "center",
     },
-    siteIcon: {
-      backgroundColor: colors.accentCool,
-    },
-    itemContent: {
-      flex: 1,
-      gap: 2,
-    },
-    itemTitle: {
+    herbariumTitle: {
       color: colors.text,
       fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize,
-      fontWeight: "700",
-      lineHeight: Typography.body.lineHeight,
+      fontSize: Typography.body.fontSize + 1,
+      fontWeight: "800",
     },
-    itemSubtitle: {
+    herbariumSubtitle: {
       color: colors.textSecondary,
       fontFamily: Typography.family,
       fontSize: Typography.caption.fontSize + 1,
-      fontWeight: Typography.caption.fontWeight,
-      lineHeight: Typography.caption.lineHeight,
-    },
-    metaRow: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: Spacing.xs,
+      fontWeight: "500",
       marginTop: 2,
     },
-    metaChip: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
-      fontWeight: "600",
-      lineHeight: Typography.caption.lineHeight,
-      paddingHorizontal: Spacing.sm,
-      paddingVertical: Spacing.xs,
-      borderRadius: BorderRadius.full,
-      backgroundColor: isDark ? "#20352F" : "#E5F3EE",
-      overflow: "hidden",
-    },
-    metaText: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
-      fontWeight: "600",
-      lineHeight: Typography.caption.lineHeight,
-    },
-    inlineEditButton: {
-      width: 34,
-      height: 34,
-      borderRadius: BorderRadius.full,
+    signOutBtn: {
+      flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
+      gap: 6,
+      marginHorizontal: Spacing.lg,
+      paddingVertical: Spacing.md,
+      borderRadius: BorderRadius.full,
+      borderWidth: 1,
+      borderColor: isDark ? "#3A1414" : "#FECACA",
+      backgroundColor: isDark ? "#1A0A0A" : "#FEF2F2",
     },
-    inlineEditButtonPressed: {
-      backgroundColor: isDark ? "#223630" : "#E8F4EF",
+    signOutBtnText: {
+      color: colors.error,
+      fontFamily: Typography.family,
+      fontSize: 14,
+      fontWeight: "700",
     },
   });

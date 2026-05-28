@@ -17,6 +17,7 @@ import {
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import StorageService from "@/src/services/storageService";
+import { MapLocationPicker, type LatLng } from "@/src/components/ui/MapLocationPicker";
 import {
   type AreaHumidityLevel,
   type AreaLightLevel,
@@ -72,6 +73,15 @@ const TYPE_OPTIONS: {
 
 const MAX_DIMENSION = 1024;
 const JPEG_QUALITY = 0.8;
+
+type SizeUnit = "m2" | "ha" | "manzana" | "cuerda";
+
+const SIZE_UNITS: { value: SizeUnit; label: string; toM2: number }[] = [
+  { value: "m2", label: "m²", toM2: 1 },
+  { value: "ha", label: "ha", toM2: 10000 },
+  { value: "manzana", label: "mz", toM2: 6988 },
+  { value: "cuerda", label: "cda", toM2: 3888 },
+];
 
 async function pickPhoto(source: "camera" | "library"): Promise<string | null> {
   if (source === "library") {
@@ -145,6 +155,13 @@ export default function AreaFormScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(
     existing?.photoUri ?? null,
   );
+  const [locationLat, setLocationLat] = useState<number | undefined>(existing?.locationLat);
+  const [locationLng, setLocationLng] = useState<number | undefined>(existing?.locationLng);
+  const [sizeValue, setSizeValue] = useState<string>(
+    existing?.areaSizeM2 != null ? String(existing.areaSizeM2) : ""
+  );
+  const [sizeUnit, setSizeUnit] = useState<SizeUnit>("m2");
+  const [showMapPicker, setShowMapPicker] = useState(false);
   const [localPhotoUri, setLocalPhotoUri] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -160,8 +177,17 @@ export default function AreaFormScreen() {
       setHumidityLevel(existing.humidityLevel);
       setIndoor(existing.indoor);
       setPhotoUri(existing.photoUri);
+      setLocationLat(existing.locationLat);
+      setLocationLng(existing.locationLng);
+      if (existing.areaSizeM2 != null) setSizeValue(String(existing.areaSizeM2));
     }
   }, [existing]);
+
+  const handleMapConfirm = (coords: LatLng) => {
+    setLocationLat(coords.lat);
+    setLocationLng(coords.lng);
+    setShowMapPicker(false);
+  };
 
   const handlePickPhoto = () => {
     Alert.alert(
@@ -214,6 +240,8 @@ export default function AreaFormScreen() {
             localPhotoUri,
           );
         }
+        const sizeNum = parseFloat(sizeValue);
+        const unit = SIZE_UNITS.find((u) => u.value === sizeUnit)!;
         await updateArea(editingId, {
           name: name.trim(),
           description: description.trim(),
@@ -223,9 +251,14 @@ export default function AreaFormScreen() {
           humidityLevel,
           indoor,
           photoUri: finalPhotoUri,
+          locationLat,
+          locationLng,
+          areaSizeM2: !isNaN(sizeNum) && sizeNum > 0 ? Math.round(sizeNum * unit.toM2) : undefined,
         });
       } else {
         // CREAR: primero el doc, despues subir foto si hay, despues update con URL
+        const sizeNum = parseFloat(sizeValue);
+        const unit = SIZE_UNITS.find((u) => u.value === sizeUnit)!;
         const created = await createArea({
           userId: currentUserId,
           name: name.trim(),
@@ -236,6 +269,9 @@ export default function AreaFormScreen() {
           humidityLevel,
           indoor,
           photoUri: null,
+          locationLat,
+          locationLng,
+          areaSizeM2: !isNaN(sizeNum) && sizeNum > 0 ? Math.round(sizeNum * unit.toM2) : undefined,
         });
         if (localPhotoUri) {
           const url = await StorageService.uploadAreaPhoto(
@@ -399,20 +435,109 @@ export default function AreaFormScreen() {
           </View>
         </View>
 
-        {/* Zona */}
+        {/* Ubicación en mapa */}
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>Ubicación</Text>
+          <Text style={styles.fieldHint}>
+            Marcá el área en el mapa — podés buscar cualquier lugar del mundo aunque no estés ahí.
+          </Text>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Seleccionar ubicación en mapa"
+            onPress={() => setShowMapPicker(true)}
+            style={({ pressed }) => [styles.locationCard, pressed && { opacity: 0.8 }]}
+          >
+            <View style={styles.locationRow}>
+              <View style={styles.locationIconWrap}>
+                <MaterialCommunityIcons
+                  name={locationLat != null ? "map-marker-check" : "map-marker-outline"}
+                  size={18}
+                  color={locationLat != null ? colors.primary : colors.textSecondary}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                {locationLat != null && locationLng != null ? (
+                  <>
+                    <Text style={styles.coordsText}>
+                      {locationLat.toFixed(6)},  {locationLng.toFixed(6)}
+                    </Text>
+                    <Text style={styles.coordsHint}>Toca para cambiar la ubicación</Text>
+                  </>
+                ) : (
+                  <Text style={styles.coordsEmpty}>Toca para abrir el mapa</Text>
+                )}
+              </View>
+              <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
+            </View>
+
+            {locationLat != null && (
+              <Pressable
+                onPress={(e) => { e.stopPropagation(); setLocationLat(undefined); setLocationLng(undefined); }}
+                style={styles.clearCoords}
+              >
+                <MaterialCommunityIcons name="close-circle-outline" size={13} color={colors.textSecondary} />
+                <Text style={styles.clearCoordsText}>Limpiar coordenadas</Text>
+              </Pressable>
+            )}
+          </Pressable>
+        </View>
+
+        {/* Superficie */}
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>Superficie (opcional)</Text>
+          <View style={styles.sizeRow}>
+            <TextInput
+              value={sizeValue}
+              onChangeText={setSizeValue}
+              placeholder="0"
+              placeholderTextColor={colors.disabled}
+              keyboardType="decimal-pad"
+              style={[styles.input, styles.sizeInput]}
+            />
+            <View style={styles.unitRow}>
+              {SIZE_UNITS.map((u) => (
+                <Pressable
+                  key={u.value}
+                  onPress={() => setSizeUnit(u.value)}
+                  style={[styles.unitPill, sizeUnit === u.value && styles.unitPillActive]}
+                >
+                  <Text style={[styles.unitPillText, sizeUnit === u.value && styles.unitPillTextActive]}>
+                    {u.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+          {sizeValue !== "" && !isNaN(parseFloat(sizeValue)) && parseFloat(sizeValue) > 0 && sizeUnit !== "m2" && (
+            <Text style={styles.sizeConvertHint}>
+              ≈ {Math.round(parseFloat(sizeValue) * (SIZE_UNITS.find(u => u.value === sizeUnit)?.toM2 ?? 1)).toLocaleString("es-CR")} m²
+            </Text>
+          )}
+        </View>
+
+        {/* Nombre de zona */}
         <View style={styles.field}>
           <Text style={styles.fieldLabel}>Zona (opcional)</Text>
           <Text style={styles.fieldHint}>
-            Ejemplo: Sala, Cocina, Lote A, Parcela 1, Invernadero norte.
+            Ejemplo: Lote A, Sala norte, Parcela 1, Invernadero sur.
           </Text>
           <TextInput
             value={zone}
             onChangeText={setZone}
-            placeholder="Lote, sala, parcela..."
+            placeholder="Nombre de la zona..."
             placeholderTextColor={colors.disabled}
             style={styles.input}
           />
         </View>
+
+        {/* Modal del mapa */}
+        <MapLocationPicker
+          visible={showMapPicker}
+          initial={locationLat != null && locationLng != null ? { lat: locationLat, lng: locationLng } : undefined}
+          onConfirm={handleMapConfirm}
+          onClose={() => setShowMapPicker(false)}
+        />
 
         {/* Luz */}
         <View style={styles.field}>
@@ -715,5 +840,102 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontFamily: Typography.family,
       fontSize: Typography.body.fontSize - 1,
       fontWeight: "700",
+    },
+    locationCard: {
+      backgroundColor: colors.surfaceCard,
+      borderRadius: BorderRadius.md,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: Spacing.md,
+      gap: Spacing.xs,
+    },
+    locationRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+    },
+    locationIconWrap: {
+      width: 32,
+      height: 32,
+      borderRadius: BorderRadius.full,
+      backgroundColor: isDark ? "#1A2E24" : "#E8F5EE",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    coordsText: {
+      color: colors.text,
+      fontFamily: Typography.family,
+      fontSize: 13,
+      fontWeight: "700",
+      letterSpacing: 0.2,
+    },
+    coordsHint: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: 11,
+      fontWeight: "500",
+      marginTop: 1,
+    },
+    coordsEmpty: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: 13,
+      fontWeight: "500",
+      fontStyle: "italic",
+    },
+    clearCoords: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      alignSelf: "flex-start",
+      marginTop: 2,
+    },
+    clearCoordsText: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: 11,
+      fontWeight: "600",
+      textDecorationLine: "underline",
+    },
+    sizeRow: {
+      flexDirection: "row",
+      gap: Spacing.sm,
+      alignItems: "center",
+      marginTop: Spacing.xs,
+    },
+    sizeInput: {
+      flex: 1,
+    },
+    unitRow: {
+      flexDirection: "row",
+      gap: 4,
+    },
+    unitPill: {
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 7,
+      borderRadius: BorderRadius.md,
+      backgroundColor: colors.surfaceCard,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    unitPillActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    unitPillText: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    unitPillTextActive: {
+      color: colors.onPrimary,
+    },
+    sizeConvertHint: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: 11,
+      fontWeight: "600",
+      marginTop: -Spacing.xs + 2,
     },
   });

@@ -63,6 +63,27 @@ const StorageService = {
   },
 
   /**
+   * Sube una foto adicional para una planta y devuelve la URL publica.
+   * Genera nombre unico por timestamp para soportar multiples fotos.
+   */
+  async uploadPlantPhoto(userId: string, plantId: string, localUri: string): Promise<string> {
+    try {
+      const response = await fetch(localUri);
+      const blob = await response.blob();
+      const timestamp = Date.now();
+      const photoRef = ref(storage, `users/${userId}/plants/${plantId}/${timestamp}.jpg`);
+      await uploadBytes(photoRef, blob, {
+        contentType: "image/jpeg",
+        cacheControl: "public, max-age=3600",
+      });
+      return await getDownloadURL(photoRef);
+    } catch (error) {
+      console.error("Error uploading plant photo:", error);
+      throw error instanceof Error ? error : new Error("No se pudo subir la foto de la planta.");
+    }
+  },
+
+  /**
    * Elimina la foto de un area (silenciosamente si no existe).
    */
   async deleteAreaPhoto(userId: string, areaId: string): Promise<void> {
