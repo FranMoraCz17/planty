@@ -1,0 +1,34 @@
+{
+  "cli": {
+    "version": ">= 18.12.3",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://planty-f2zh.onrender.com",
+        "EXPO_PUBLIC_CHAT_APP": "https://chat-backend-mjfk.onrender.com",
+        "EXPO_PUBLIC_CHAT_WS_APP": "wss://chat-backend-mjfk.onrender.com"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://planty-f2zh.onrender.com",
+        "EXPO_PUBLIC_CHAT_APP": "https://chat-backend-mjfk.onrender.com",
+        "EXPO_PUBLIC_CHAT_WS_APP": "wss://chat-backend-mjfk.onrender.com"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
