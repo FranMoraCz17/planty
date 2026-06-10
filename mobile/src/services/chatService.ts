@@ -1,10 +1,3 @@
-// Servicio del chat de la comunidad.
-// Consume el backend de chat desarrollado en clase (FastAPI + WebSocket).
-// El backend ya implementa: persistencia, token por nickname, censura de
-// palabras, TTL, "escribiendo", etc. Aquí solo consumimos el chat grupal.
-
-// URLs públicas del backend desplegado en Render. Se pueden sobreescribir con
-// variables de entorno EXPO_PUBLIC_CHAT_APP / EXPO_PUBLIC_CHAT_WS_APP.
 const HTTP_BASE_URL =
   process.env.EXPO_PUBLIC_CHAT_APP ?? "https://chat-backend-mjfk.onrender.com";
 const WS_BASE_URL =
@@ -36,16 +29,18 @@ export interface JoinResponse {
   token: string;
 }
 
-// Eventos que el servidor envía por el WebSocket (servidor → cliente).
+// Eventos
 export type ChatServerEvent =
   | { type: "group_message"; message: ChatMessage }
   | { type: "group_history"; messages: ChatMessage[] }
+  | { type: "dm"; message: ChatMessage }
   | { type: "users_list"; users: ChatUser[] }
   | { type: "user_joined"; user: ChatUser }
   | { type: "user_left"; user_id: string }
   | { type: "typing"; user_id: string; nickname: string }
   | { type: "stop_typing"; user_id: string }
   | { type: "group_key"; key: string }
+  | { type: "message_seen"; message_id: string; seen_by: string; seen_at: string }
   | { type: "message_expired"; message_id: string }
   | { type: "pong" }
   | { type: "error"; message: string };
@@ -59,10 +54,12 @@ export interface ChatSocketHandlers {
 }
 
 // Wrapper sobre el WebSocket nativo con helpers tipados para enviar mensajes.
+// El parámetro opcional `to` (user_id) convierte el evento en privado (DM).
 export interface ChatSocket {
   sendGroupMessage: (content: string) => void;
-  sendTyping: () => void;
-  sendStopTyping: () => void;
+  sendDM: (to: string, content: string) => void;
+  sendTyping: (to?: string) => void;
+  sendStopTyping: (to?: string) => void;
   close: () => void;
 }
 
@@ -74,7 +71,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       const body = await response.json();
       detail = body?.detail?.message ?? body?.detail ?? detail;
     } catch {
-      // respuesta sin cuerpo JSON, usamos el mensaje por defecto
+      //usamos el mensaje por defecto
     }
     throw new Error(detail);
   }
@@ -99,6 +96,13 @@ const ChatService = {
   /** Usuarios conectados ahora mismo. */
   async getOnlineUsers(): Promise<ChatUser[]> {
     return request<ChatUser[]>("/api/chat/users");
+  },
+
+  /** Historial de mensajes directos entre el usuario actual y otro. */
+  async getDmHistory(token: string, otherId: string): Promise<ChatMessage[]> {
+    return request<ChatMessage[]>(`/api/chat/messages/dm/${otherId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
   },
 
   /**
@@ -129,8 +133,12 @@ const ChatService = {
     return {
       sendGroupMessage: (content: string) =>
         send({ type: "group_message", content }),
-      sendTyping: () => send({ type: "typing" }),
-      sendStopTyping: () => send({ type: "stop_typing" }),
+      sendDM: (to: string, content: string) =>
+        send({ type: "dm", to, content }),
+      sendTyping: (to?: string) =>
+        send(to ? { type: "typing", to } : { type: "typing" }),
+      sendStopTyping: (to?: string) =>
+        send(to ? { type: "stop_typing", to } : { type: "stop_typing" }),
       close: () => ws.close(),
     };
   },
