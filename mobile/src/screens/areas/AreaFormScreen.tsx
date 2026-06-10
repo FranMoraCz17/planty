@@ -16,8 +16,8 @@ import {
 } from "react-native";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
+import * as Location from "expo-location";
 import StorageService from "@/src/services/storageService";
-import { MapLocationPicker, type LatLng } from "@/src/components/ui/MapLocationPicker";
 import {
   type AreaHumidityLevel,
   type AreaLightLevel,
@@ -161,7 +161,7 @@ export default function AreaFormScreen() {
     existing?.areaSizeM2 != null ? String(existing.areaSizeM2) : ""
   );
   const [sizeUnit, setSizeUnit] = useState<SizeUnit>("m2");
-  const [showMapPicker, setShowMapPicker] = useState(false);
+  const [isFetchingLocation, setIsFetchingLocation] = useState(false);
   const [localPhotoUri, setLocalPhotoUri] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -183,10 +183,22 @@ export default function AreaFormScreen() {
     }
   }, [existing]);
 
-  const handleMapConfirm = (coords: LatLng) => {
-    setLocationLat(coords.lat);
-    setLocationLng(coords.lng);
-    setShowMapPicker(false);
+  const handleGetLocation = async () => {
+    setIsFetchingLocation(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permiso denegado", "Necesitamos permiso de ubicación para registrar las coordenadas del área.");
+        return;
+      }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      setLocationLat(loc.coords.latitude);
+      setLocationLng(loc.coords.longitude);
+    } catch {
+      Alert.alert("Error", "No se pudo obtener la ubicación.");
+    } finally {
+      setIsFetchingLocation(false);
+    }
   };
 
   const handlePickPhoto = () => {
@@ -435,19 +447,13 @@ export default function AreaFormScreen() {
           </View>
         </View>
 
-        {/* Ubicación en mapa */}
+        {/* Ubicación GPS */}
         <View style={styles.field}>
           <Text style={styles.fieldLabel}>Ubicación</Text>
           <Text style={styles.fieldHint}>
-            Marcá el área en el mapa — podés buscar cualquier lugar del mundo aunque no estés ahí.
+            Capturá las coordenadas GPS del área. Podés ingresar lat/lng manualmente si registrás una finca remota.
           </Text>
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Seleccionar ubicación en mapa"
-            onPress={() => setShowMapPicker(true)}
-            style={({ pressed }) => [styles.locationCard, pressed && { opacity: 0.8 }]}
-          >
+          <View style={styles.locationCard}>
             <View style={styles.locationRow}>
               <View style={styles.locationIconWrap}>
                 <MaterialCommunityIcons
@@ -462,25 +468,63 @@ export default function AreaFormScreen() {
                     <Text style={styles.coordsText}>
                       {locationLat.toFixed(6)},  {locationLng.toFixed(6)}
                     </Text>
-                    <Text style={styles.coordsHint}>Toca para cambiar la ubicación</Text>
+                    <Text style={styles.coordsHint}>Coordenadas registradas</Text>
                   </>
                 ) : (
-                  <Text style={styles.coordsEmpty}>Toca para abrir el mapa</Text>
+                  <Text style={styles.coordsEmpty}>Sin coordenadas aún</Text>
                 )}
               </View>
-              <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Usar mi ubicación actual"
+                onPress={() => void handleGetLocation()}
+                disabled={isFetchingLocation}
+                style={({ pressed }) => [
+                  styles.gpsBtn,
+                  pressed && { opacity: 0.75 },
+                  isFetchingLocation && { opacity: 0.5 },
+                ]}
+              >
+                {isFetchingLocation
+                  ? <ActivityIndicator size="small" color={colors.onPrimary} />
+                  : <>
+                      <MaterialCommunityIcons name="crosshairs-gps" size={14} color={colors.onPrimary} />
+                      <Text style={styles.gpsBtnText}>GPS</Text>
+                    </>
+                }
+              </Pressable>
+            </View>
+
+            {/* Inputs manuales para registrar finca remota */}
+            <View style={styles.coordInputRow}>
+              <TextInput
+                value={locationLat != null ? String(locationLat) : ""}
+                onChangeText={(v) => { const n = parseFloat(v); setLocationLat(isNaN(n) ? undefined : n); }}
+                placeholder="Latitud (ej: 9.7489)"
+                placeholderTextColor={colors.disabled}
+                keyboardType="decimal-pad"
+                style={[styles.input, styles.coordInput]}
+              />
+              <TextInput
+                value={locationLng != null ? String(locationLng) : ""}
+                onChangeText={(v) => { const n = parseFloat(v); setLocationLng(isNaN(n) ? undefined : n); }}
+                placeholder="Longitud (ej: -83.7534)"
+                placeholderTextColor={colors.disabled}
+                keyboardType="decimal-pad"
+                style={[styles.input, styles.coordInput]}
+              />
             </View>
 
             {locationLat != null && (
               <Pressable
-                onPress={(e) => { e.stopPropagation(); setLocationLat(undefined); setLocationLng(undefined); }}
+                onPress={() => { setLocationLat(undefined); setLocationLng(undefined); }}
                 style={styles.clearCoords}
               >
                 <MaterialCommunityIcons name="close-circle-outline" size={13} color={colors.textSecondary} />
                 <Text style={styles.clearCoordsText}>Limpiar coordenadas</Text>
               </Pressable>
             )}
-          </Pressable>
+          </View>
         </View>
 
         {/* Superficie */}
@@ -530,14 +574,6 @@ export default function AreaFormScreen() {
             style={styles.input}
           />
         </View>
-
-        {/* Modal del mapa */}
-        <MapLocationPicker
-          visible={showMapPicker}
-          initial={locationLat != null && locationLng != null ? { lat: locationLat, lng: locationLng } : undefined}
-          onConfirm={handleMapConfirm}
-          onClose={() => setShowMapPicker(false)}
-        />
 
         {/* Luz */}
         <View style={styles.field}>
@@ -882,6 +918,32 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontSize: 13,
       fontWeight: "500",
       fontStyle: "italic",
+    },
+    gpsBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: colors.primary,
+      paddingHorizontal: Spacing.sm + 2,
+      paddingVertical: 7,
+      borderRadius: BorderRadius.full,
+      minWidth: 56,
+      justifyContent: "center",
+    },
+    gpsBtnText: {
+      color: colors.onPrimary,
+      fontFamily: Typography.family,
+      fontSize: 12,
+      fontWeight: "800",
+    },
+    coordInputRow: {
+      flexDirection: "row",
+      gap: Spacing.sm,
+      marginTop: Spacing.xs,
+    },
+    coordInput: {
+      flex: 1,
+      fontSize: Typography.caption.fontSize + 1,
     },
     clearCoords: {
       flexDirection: "row",

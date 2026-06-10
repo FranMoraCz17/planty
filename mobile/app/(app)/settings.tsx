@@ -1,8 +1,9 @@
-import React, { useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { signOut } from "firebase/auth";
+import { useState } from "react";
 import {
+  Alert,
   Linking,
   Pressable,
   SafeAreaView,
@@ -12,7 +13,6 @@ import {
   Text,
   View,
 } from "react-native";
-import ThemedButton from "@/src/components/ui/ThemedButton";
 import { auth } from "@/src/firebase/firebaseConfig";
 import {
   BorderRadius,
@@ -22,372 +22,371 @@ import {
 } from "@/src/theme/designSystem";
 import { useAppTheme } from "@/src/theme/ThemeProvider";
 
-type SettingsVisualOptions = {
-  largeText: boolean;
-  highContrast: boolean;
-};
+type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
+
+function SectionHeader({ title }: { title: string }) {
+  const { colors } = useAppTheme();
+  return (
+    <Text style={{
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: 11,
+      fontWeight: "700",
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
+      paddingHorizontal: Spacing.lg,
+      marginTop: Spacing.sm,
+    }}>
+      {title}
+    </Text>
+  );
+}
+
+function SettingRow({
+  icon,
+  iconColor,
+  label,
+  hint,
+  value,
+  onToggle,
+  last,
+}: {
+  icon: IconName;
+  iconColor?: string;
+  label: string;
+  hint?: string;
+  value: boolean;
+  onToggle: (v: boolean) => void;
+  last?: boolean;
+}) {
+  const { colors } = useAppTheme();
+  return (
+    <View style={[
+      rowStyles.row,
+      !last && { borderBottomWidth: 1, borderBottomColor: colors.border },
+    ]}>
+      <View style={[rowStyles.iconWrap, { backgroundColor: (iconColor ?? colors.primary) + "22" }]}>
+        <MaterialCommunityIcons name={icon} size={16} color={iconColor ?? colors.primary} />
+      </View>
+      <View style={rowStyles.copy}>
+        <Text style={[rowStyles.label, { color: colors.text }]}>{label}</Text>
+        {hint && <Text style={[rowStyles.hint, { color: colors.textSecondary }]}>{hint}</Text>}
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onToggle}
+        trackColor={{ false: colors.border, true: colors.primary }}
+        thumbColor="#FFFFFF"
+      />
+    </View>
+  );
+}
+
+function NavRow({
+  icon,
+  iconColor,
+  iconBg,
+  label,
+  hint,
+  onPress,
+  danger,
+  last,
+}: {
+  icon: IconName;
+  iconColor?: string;
+  iconBg?: string;
+  label: string;
+  hint?: string;
+  onPress: () => void;
+  danger?: boolean;
+  last?: boolean;
+}) {
+  const { colors, isDark } = useAppTheme();
+  const fg = danger ? colors.error : (iconColor ?? colors.primary);
+  const bg = iconBg ?? (danger
+    ? (isDark ? "#3A1414" : "#FEE2E2")
+    : fg + "22");
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        rowStyles.row,
+        !last && { borderBottomWidth: 1, borderBottomColor: colors.border },
+        pressed && { opacity: 0.7 },
+      ]}
+    >
+      <View style={[rowStyles.iconWrap, { backgroundColor: bg }]}>
+        <MaterialCommunityIcons name={icon} size={16} color={fg} />
+      </View>
+      <View style={rowStyles.copy}>
+        <Text style={[rowStyles.label, { color: danger ? colors.error : colors.text }]}>{label}</Text>
+        {hint && <Text style={[rowStyles.hint, { color: colors.textSecondary }]}>{hint}</Text>}
+      </View>
+      <MaterialCommunityIcons name="chevron-right" size={18} color={colors.textSecondary} />
+    </Pressable>
+  );
+}
+
+const rowStyles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 13,
+  },
+  iconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  copy: { flex: 1, gap: 1 },
+  label: {
+    fontFamily: Typography.family,
+    fontSize: Typography.body.fontSize,
+    fontWeight: "600",
+  },
+  hint: {
+    fontFamily: Typography.family,
+    fontSize: Typography.caption.fontSize,
+    fontWeight: "500",
+  },
+});
+
+function Card({ children }: { children: React.ReactNode }) {
+  const { colors } = useAppTheme();
+  return (
+    <View style={{
+      marginHorizontal: Spacing.lg,
+      backgroundColor: colors.surfaceCard,
+      borderRadius: BorderRadius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      overflow: "hidden",
+    }}>
+      {children}
+    </View>
+  );
+}
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { colors, isDark, mode, toggleTheme } = useAppTheme();
 
-  const [largeText, setLargeText] = useState(false);
-  const [highContrast, setHighContrast] = useState(false);
+  const [notifRiego, setNotifRiego] = useState(true);
+  const [notifDiag, setNotifDiag] = useState(true);
+  const [notifResumen, setNotifResumen] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
   const [hapticsEnabled, setHapticsEnabled] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
-
-  const styles = createStyles(colors, isDark, { largeText, highContrast });
-
-  const handleOpenSystemSettings = () => {
-    void Linking.openSettings();
-  };
 
   const handleSignOut = async () => {
     try {
       setIsSigningOut(true);
-      setErrorMessage(null);
       await signOut(auth);
       router.replace("/(auth)/login");
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "No se pudo cerrar la sesion.";
-      setErrorMessage(message);
+    } catch (e) {
+      Alert.alert("Error", e instanceof Error ? e.message : "No se pudo cerrar la sesión.");
     } finally {
       setIsSigningOut(false);
     }
   };
 
+  const handleDeleteData = () => {
+    Alert.alert(
+      "Borrar todos mis datos",
+      "Esta acción elimina tus plantas, áreas e historial de diagnósticos de forma permanente. No se puede deshacer.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Borrar todo",
+          style: "destructive",
+          onPress: () => Alert.alert("Próximamente", "Esta función estará disponible en la próxima versión."),
+        },
+      ],
+    );
+  };
+
+  const handleExport = () => {
+    Alert.alert("Próximamente", "La exportación de datos estará disponible en la próxima versión.");
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={{ paddingBottom: 120, gap: Spacing.sm, paddingTop: Spacing.sm }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
+        {/* Header */}
+        <View style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: Spacing.sm,
+          paddingHorizontal: Spacing.lg,
+          paddingVertical: Spacing.sm,
+        }}>
           <Pressable
-            accessibilityLabel="Volver a la pantalla anterior"
-            accessibilityRole="button"
             onPress={() => router.back()}
-            style={({ pressed }) => [
-              styles.backButton,
-              pressed && styles.backButtonPressed,
-            ]}
+            style={({ pressed }) => [{
+              width: 40, height: 40, borderRadius: 20,
+              alignItems: "center", justifyContent: "center",
+              backgroundColor: colors.surfaceCard,
+              borderWidth: 1, borderColor: colors.border,
+            }, pressed && { opacity: 0.7 }]}
           >
-            <MaterialCommunityIcons name="arrow-left" size={18} color={colors.text} />
+            <MaterialCommunityIcons name="arrow-left" size={20} color={colors.text} />
           </Pressable>
-          <View style={styles.headerCopy}>
-            <Text style={styles.title}>Ajustes</Text>
-            <Text style={styles.subtitle}>Configuracion basica y accesibilidad</Text>
+          <View>
+            <Text style={{ color: colors.text, fontFamily: Typography.family, fontSize: 22, fontWeight: "800", letterSpacing: -0.3 }}>
+              Configuración
+            </Text>
+            <Text style={{ color: colors.textSecondary, fontFamily: Typography.family, fontSize: 13, fontWeight: "500" }}>
+              App y privacidad
+            </Text>
           </View>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Apariencia</Text>
-          <Text style={styles.cardBody}>
-            Modo actual: {mode === "dark" ? "Oscuro" : "Claro"}
-          </Text>
-          <ThemedButton
-            accessibilityLabel="Alternar tema de la aplicacion"
-            label={mode === "dark" ? "Pasar a claro" : "Pasar a oscuro"}
+        {/* Apariencia */}
+        <SectionHeader title="Apariencia" />
+        <Card>
+          <NavRow
+            icon={mode === "dark" ? "weather-night" : "weather-sunny"}
+            iconColor={mode === "dark" ? "#8B5CF6" : "#F59E0B"}
+            label={mode === "dark" ? "Modo oscuro" : "Modo claro"}
+            hint="Toca para cambiar el tema"
             onPress={toggleTheme}
+            last
           />
-        </View>
+        </Card>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Accesibilidad</Text>
-          <Text style={styles.cardBody}>
-            Opciones rapidas para lectura y comodidad visual.
-          </Text>
+        {/* Notificaciones */}
+        <SectionHeader title="Notificaciones" />
+        <Card>
+          <SettingRow
+            icon="water-outline"
+            iconColor={colors.accentCool}
+            label="Recordatorios de riego"
+            hint="Alertas cuando toque regar una planta"
+            value={notifRiego}
+            onToggle={setNotifRiego}
+          />
+          <SettingRow
+            icon="stethoscope"
+            iconColor={colors.accentWarm}
+            label="Diagnósticos programados"
+            hint="Aviso cuando una planta necesita revisión"
+            value={notifDiag}
+            onToggle={setNotifDiag}
+          />
+          <SettingRow
+            icon="chart-bar"
+            iconColor={colors.primary}
+            label="Resumen semanal"
+            hint="Reporte de salud de tu colección cada lunes"
+            value={notifResumen}
+            onToggle={setNotifResumen}
+            last
+          />
+        </Card>
 
-          <View style={styles.settingRow}>
-            <View style={styles.settingCopy}>
-              <Text style={styles.settingLabel}>Texto grande</Text>
-              <Text style={styles.settingHint}>
-                Aumenta el tamano del texto en esta pantalla.
-              </Text>
-            </View>
-            <Switch
-              accessibilityLabel="Activar texto grande"
-              accessibilityRole="switch"
-              onValueChange={setLargeText}
-              trackColor={{ false: colors.border, true: colors.primary }}
-              thumbColor={largeText ? colors.onPrimary : "#FFFFFF"}
-              value={largeText}
-            />
-          </View>
+        {/* Accesibilidad */}
+        <SectionHeader title="Accesibilidad" />
+        <Card>
+          <SettingRow
+            icon="motion-sensor-off"
+            iconColor={colors.accentLavender}
+            label="Reducir animaciones"
+            hint="Menos movimiento en transiciones"
+            value={reduceMotion}
+            onToggle={setReduceMotion}
+          />
+          <SettingRow
+            icon="vibrate"
+            iconColor={colors.primary}
+            label="Vibración táctil"
+            hint="Respuesta háptica en acciones"
+            value={hapticsEnabled}
+            onToggle={setHapticsEnabled}
+            last
+          />
+        </Card>
 
-          <View style={styles.settingRow}>
-            <View style={styles.settingCopy}>
-              <Text style={styles.settingLabel}>Alto contraste</Text>
-              <Text style={styles.settingHint}>
-                Refuerza bordes y contraste para mejorar legibilidad.
-              </Text>
-            </View>
-            <Switch
-              accessibilityLabel="Activar alto contraste"
-              accessibilityRole="switch"
-              onValueChange={setHighContrast}
-              trackColor={{ false: colors.border, true: colors.primary }}
-              thumbColor={highContrast ? colors.onPrimary : "#FFFFFF"}
-              value={highContrast}
-            />
-          </View>
+        {/* Permisos */}
+        <SectionHeader title="Permisos del sistema" />
+        <Card>
+          <NavRow
+            icon="shield-lock-outline"
+            iconColor={colors.primary}
+            label="Gestionar permisos"
+            hint="Cámara, ubicación y notificaciones"
+            onPress={() => void Linking.openSettings()}
+            last
+          />
+        </Card>
 
-          <View style={styles.settingRow}>
-            <View style={styles.settingCopy}>
-              <Text style={styles.settingLabel}>Reducir animaciones</Text>
-              <Text style={styles.settingHint}>
-                Minimiza transiciones para evitar fatiga visual.
-              </Text>
-            </View>
-            <Switch
-              accessibilityLabel="Reducir animaciones"
-              accessibilityRole="switch"
-              onValueChange={setReduceMotion}
-              trackColor={{ false: colors.border, true: colors.primary }}
-              thumbColor={reduceMotion ? colors.onPrimary : "#FFFFFF"}
-              value={reduceMotion}
-            />
-          </View>
+        {/* Privacidad */}
+        <SectionHeader title="Privacidad y datos" />
+        <Card>
+          <NavRow
+            icon="database-export-outline"
+            iconColor={colors.accentCool}
+            label="Exportar mis datos"
+            hint="Descarga un archivo con toda tu información"
+            onPress={handleExport}
+          />
+          <NavRow
+            icon="account-edit-outline"
+            iconColor={colors.primary}
+            label="Editar perfil"
+            hint="Nombre, usuario y foto"
+            onPress={() => router.push("/(app)/forms/user")}
+          />
+          <NavRow
+            icon="trash-can-outline"
+            label="Borrar todos mis datos"
+            hint="Elimina plantas, áreas e historial"
+            onPress={handleDeleteData}
+            danger
+            last
+          />
+        </Card>
 
-          <View style={styles.settingRowLast}>
-            <View style={styles.settingCopy}>
-              <Text style={styles.settingLabel}>Vibracion tactil</Text>
-              <Text style={styles.settingHint}>
-                Mantiene respuesta tactil en acciones principales.
-              </Text>
-            </View>
-            <Switch
-              accessibilityLabel="Activar vibracion tactil"
-              accessibilityRole="switch"
-              onValueChange={setHapticsEnabled}
-              trackColor={{ false: colors.border, true: colors.primary }}
-              thumbColor={hapticsEnabled ? colors.onPrimary : "#FFFFFF"}
-              value={hapticsEnabled}
-            />
-          </View>
-        </View>
+        {/* Acerca de */}
+        <SectionHeader title="Acerca de" />
+        <Card>
+          <NavRow
+            icon="github"
+            iconColor={isDark ? "#E2E8F0" : "#1E293B"}
+            iconBg={isDark ? "#2D3748" : "#F1F5F9"}
+            label="Código fuente"
+            hint="github.com/FranMoraCz17/planty"
+            onPress={() => void Linking.openURL("https://github.com/FranMoraCz17/planty")}
+          />
+          <NavRow
+            icon="leaf"
+            iconColor={colors.primary}
+            label="Versión"
+            hint="Planty v1.0 — EIF411 UNA Brunca 2025"
+            onPress={() => {}}
+            last
+          />
+        </Card>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Permisos</Text>
-          <Text style={styles.cardBody}>
-            Gestiona permisos del dispositivo como camara y galeria.
-          </Text>
-          <Pressable
-            accessibilityLabel="Abrir configuracion del sistema"
-            accessibilityRole="button"
-            onPress={handleOpenSystemSettings}
-            style={({ pressed }) => [
-              styles.primaryActionButton,
-              pressed && styles.primaryActionButtonPressed,
-            ]}
-          >
-            <MaterialCommunityIcons name="cog-outline" size={18} color={colors.onPrimary} />
-            <Text style={styles.primaryActionButtonText}>
-              Abrir configuracion del sistema
-            </Text>
-          </Pressable>
-        </View>
+        {/* Cuenta */}
+        <SectionHeader title="Cuenta" />
+        <Card>
+          <NavRow
+            icon="logout"
+            label={isSigningOut ? "Cerrando sesión..." : "Cerrar sesión"}
+            onPress={() => void handleSignOut()}
+            danger
+            last
+          />
+        </Card>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Cuenta</Text>
-          <Text style={styles.cardBody}>Cierra la sesion actual y vuelve al login.</Text>
-          <Pressable
-            accessibilityLabel="Cerrar sesion"
-            accessibilityRole="button"
-            disabled={isSigningOut}
-            onPress={handleSignOut}
-            style={({ pressed }) => [
-              styles.dangerActionButton,
-              pressed && styles.dangerActionButtonPressed,
-              isSigningOut && styles.actionButtonDisabled,
-            ]}
-          >
-            <MaterialCommunityIcons name="logout" size={18} color="#FFFFFF" />
-            <Text style={styles.dangerActionButtonText}>
-              {isSigningOut ? "Cerrando sesion..." : "Cerrar sesion"}
-            </Text>
-          </Pressable>
-          {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
-
-const createStyles = (
-  colors: ThemeColors,
-  isDark: boolean,
-  options: SettingsVisualOptions,
-) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.surface,
-    },
-    content: {
-      padding: Spacing.lg,
-      gap: Spacing.md,
-      paddingBottom: Spacing.xxl,
-    },
-    header: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: Spacing.md,
-    },
-    backButton: {
-      width: 42,
-      height: 42,
-      borderRadius: BorderRadius.full,
-      alignItems: "center",
-      justifyContent: "center",
-      backgroundColor: colors.surfaceCard,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    backButtonPressed: {
-      backgroundColor: isDark ? "#223630" : "#E8F4EF",
-    },
-    headerCopy: {
-      gap: 2,
-      flex: 1,
-    },
-    title: {
-      color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: options.largeText
-        ? Typography.title.fontSize - 1
-        : Typography.title.fontSize - 4,
-      fontWeight: Typography.title.fontWeight,
-      lineHeight: Typography.title.lineHeight,
-    },
-    subtitle: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: options.largeText
-        ? Typography.caption.fontSize + 3
-        : Typography.caption.fontSize + 1,
-      fontWeight: "600",
-      lineHeight: Typography.caption.lineHeight,
-    },
-    card: {
-      backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.lg,
-      borderWidth: 1,
-      borderColor: options.highContrast ? colors.text : colors.border,
-      padding: Spacing.md,
-      gap: Spacing.sm,
-    },
-    cardTitle: {
-      color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: options.largeText
-        ? Typography.body.fontSize + 2
-        : Typography.body.fontSize,
-      fontWeight: "700",
-      lineHeight: Typography.body.lineHeight,
-    },
-    cardBody: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: options.largeText
-        ? Typography.caption.fontSize + 3
-        : Typography.caption.fontSize + 1,
-      fontWeight: Typography.caption.fontWeight,
-      lineHeight: Typography.caption.lineHeight,
-    },
-    settingRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: Spacing.sm,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-      paddingVertical: Spacing.sm,
-    },
-    settingRowLast: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: Spacing.sm,
-      paddingVertical: Spacing.sm,
-    },
-    settingCopy: {
-      flex: 1,
-      gap: 2,
-    },
-    settingLabel: {
-      color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: options.largeText
-        ? Typography.body.fontSize + 1
-        : Typography.body.fontSize,
-      fontWeight: "700",
-    },
-    settingHint: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: options.largeText
-        ? Typography.caption.fontSize + 2
-        : Typography.caption.fontSize,
-      lineHeight: Typography.caption.lineHeight,
-    },
-    primaryActionButton: {
-      minHeight: 48,
-      borderRadius: BorderRadius.md,
-      backgroundColor: colors.primary,
-      alignItems: "center",
-      justifyContent: "center",
-      flexDirection: "row",
-      gap: 8,
-      paddingHorizontal: Spacing.md,
-    },
-    primaryActionButtonPressed: {
-      backgroundColor: colors.pressed,
-    },
-    primaryActionButtonText: {
-      color: colors.onPrimary,
-      fontFamily: Typography.family,
-      fontSize: options.largeText
-        ? Typography.body.fontSize + 1
-        : Typography.body.fontSize,
-      fontWeight: "700",
-      lineHeight: Typography.body.lineHeight,
-    },
-    dangerActionButton: {
-      minHeight: 48,
-      borderRadius: BorderRadius.md,
-      backgroundColor: colors.error,
-      alignItems: "center",
-      justifyContent: "center",
-      flexDirection: "row",
-      gap: 8,
-      paddingHorizontal: Spacing.md,
-    },
-    dangerActionButtonPressed: {
-      opacity: 0.85,
-    },
-    actionButtonDisabled: {
-      opacity: 0.65,
-    },
-    dangerActionButtonText: {
-      color: "#FFFFFF",
-      fontFamily: Typography.family,
-      fontSize: options.largeText
-        ? Typography.body.fontSize + 1
-        : Typography.body.fontSize,
-      fontWeight: "700",
-      lineHeight: Typography.body.lineHeight,
-    },
-    errorText: {
-      color: colors.error,
-      fontFamily: Typography.family,
-      fontSize: options.largeText
-        ? Typography.caption.fontSize + 3
-        : Typography.caption.fontSize + 1,
-      fontWeight: "600",
-      lineHeight: Typography.caption.lineHeight,
-    },
-  });

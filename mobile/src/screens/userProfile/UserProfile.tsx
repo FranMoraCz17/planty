@@ -214,24 +214,76 @@ export default function UserProfile() {
           </View>
         )}
 
-        {/* Card Herbario — placeholder para paso 4 */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Ver mi herbario"
-          onPress={() => router.push("/herbario" as never)}
-          style={({ pressed }) => [styles.herbariumCard, pressed && { opacity: 0.88 }]}
-        >
-          <View style={styles.herbariumLeft}>
-            <View style={styles.herbariumIconWrap}>
-              <MaterialCommunityIcons name="book-open-page-variant-outline" size={22} color={colors.onPrimary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.herbariumTitle}>Mi Herbario</Text>
-              <Text style={styles.herbariumSubtitle}>Fichas botánicas de tus especies</Text>
-            </View>
+        {/* Areas del usuario */}
+        {areas.length > 0 && (
+          <View style={styles.sectionWrap}>
+            <Text style={styles.sectionLabel}>Mis áreas</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.areasScroll}>
+              {areas.map((area) => {
+                const plantCount = plants.filter((p) => p.areaId === area.id).length;
+                return (
+                  <View key={area.id} style={styles.areaChip}>
+                    <MaterialCommunityIcons name="map-marker-outline" size={12} color={colors.primary} />
+                    <Text style={styles.areaChipName} numberOfLines={1}>{area.name}</Text>
+                    <Text style={styles.areaChipCount}>{plantCount}</Text>
+                  </View>
+                );
+              })}
+            </ScrollView>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
-        </Pressable>
+        )}
+
+        {/* Menu de accesos directos */}
+        <View style={styles.menuCard}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/herbario" as never)}
+            style={({ pressed }) => [styles.menuRow, pressed && { opacity: 0.7 }]}
+          >
+            <View style={[styles.menuIconWrap, { backgroundColor: colors.primary + "22" }]}>
+              <MaterialCommunityIcons name="book-open-page-variant-outline" size={18} color={colors.primary} />
+            </View>
+            <View style={styles.menuBody}>
+              <Text style={styles.menuTitle}>Mi Herbario</Text>
+              <Text style={styles.menuSubtitle}>Fichas botánicas de tus especies</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={18} color={colors.textSecondary} />
+          </Pressable>
+
+          <View style={styles.menuDivider} />
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/(app)/clinic" as never)}
+            style={({ pressed }) => [styles.menuRow, pressed && { opacity: 0.7 }]}
+          >
+            <View style={[styles.menuIconWrap, { backgroundColor: colors.accentWarm + "22" }]}>
+              <MaterialCommunityIcons name="stethoscope" size={18} color={colors.accentWarm} />
+            </View>
+            <View style={styles.menuBody}>
+              <Text style={styles.menuTitle}>Clínica Fitopatológica</Text>
+              <Text style={styles.menuSubtitle}>Diagnósticos e historial de salud</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={18} color={colors.textSecondary} />
+          </Pressable>
+
+          <View style={styles.menuDivider} />
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/(app)/settings")}
+            style={({ pressed }) => [styles.menuRow, pressed && { opacity: 0.7 }]}
+          >
+            <View style={[styles.menuIconWrap, { backgroundColor: colors.textSecondary + "22" }]}>
+              <MaterialCommunityIcons name="cog-outline" size={18} color={colors.textSecondary} />
+            </View>
+            <View style={styles.menuBody}>
+              <Text style={styles.menuTitle}>Configuración</Text>
+              <Text style={styles.menuSubtitle}>Apariencia, notificaciones y privacidad</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={18} color={colors.textSecondary} />
+          </Pressable>
+        </View>
 
         {/* Cerrar sesion */}
         <Pressable
@@ -486,43 +538,87 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontSize: 11,
       fontWeight: "700",
     },
-    herbariumCard: {
+    sectionWrap: {
+      paddingHorizontal: Spacing.lg,
+      gap: Spacing.xs,
+    },
+    sectionLabel: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: 11,
+      fontWeight: "700",
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
+    },
+    areasScroll: {
+      gap: Spacing.xs,
+      paddingVertical: 2,
+    },
+    areaChip: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "space-between",
+      gap: 4,
+      paddingHorizontal: Spacing.sm + 2,
+      paddingVertical: 7,
+      borderRadius: BorderRadius.full,
+      backgroundColor: colors.surfaceCard,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    areaChipName: {
+      color: colors.text,
+      fontFamily: Typography.family,
+      fontSize: 12,
+      fontWeight: "700",
+      maxWidth: 100,
+    },
+    areaChipCount: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: 11,
+      fontWeight: "600",
+    },
+    menuCard: {
       marginHorizontal: Spacing.lg,
       backgroundColor: colors.surfaceCard,
       borderRadius: BorderRadius.lg,
       borderWidth: 1,
       borderColor: colors.border,
-      padding: Spacing.md,
+      overflow: "hidden",
     },
-    herbariumLeft: {
+    menuRow: {
       flexDirection: "row",
       alignItems: "center",
       gap: Spacing.sm,
-      flex: 1,
+      padding: Spacing.md,
     },
-    herbariumIconWrap: {
-      width: 44,
-      height: 44,
-      borderRadius: BorderRadius.md,
-      backgroundColor: colors.primary,
+    menuDivider: {
+      height: 1,
+      backgroundColor: colors.border,
+      marginLeft: Spacing.md + 44,
+    },
+    menuIconWrap: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
       alignItems: "center",
       justifyContent: "center",
     },
-    herbariumTitle: {
+    menuBody: {
+      flex: 1,
+      gap: 1,
+    },
+    menuTitle: {
       color: colors.text,
       fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize + 1,
-      fontWeight: "800",
+      fontSize: Typography.body.fontSize,
+      fontWeight: "700",
     },
-    herbariumSubtitle: {
+    menuSubtitle: {
       color: colors.textSecondary,
       fontFamily: Typography.family,
       fontSize: Typography.caption.fontSize + 1,
       fontWeight: "500",
-      marginTop: 2,
     },
     signOutBtn: {
       flexDirection: "row",
