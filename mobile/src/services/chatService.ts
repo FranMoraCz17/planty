@@ -1,7 +1,7 @@
 const HTTP_BASE_URL =
-  process.env.EXPO_PUBLIC_CHAT_APP ?? "https://chat-backend-mjfk.onrender.com";
+  process.env.EXPO_PUBLIC_CHAT_APP ?? "https://chat-backend-4nzg.onrender.com";
 const WS_BASE_URL =
-  process.env.EXPO_PUBLIC_CHAT_WS_APP ?? "wss://chat-backend-mjfk.onrender.com";
+  process.env.EXPO_PUBLIC_CHAT_WS_APP ?? "wss://chat-backend-4nzg.onrender.com";
 
 export interface ChatUser {
   id: string;
@@ -53,11 +53,20 @@ export interface ChatSocketHandlers {
   onError?: (error: unknown) => void;
 }
 
+// Opciones al enviar un mensaje:
+// ttl — segundos hasta autodestruirse (null/undefined = permanente)
+// allowReadReceipt — si false, el remitente no recibe confirmación de visto
+export interface SendMessageOptions {
+  ttl?: number | null;
+  allowReadReceipt?: boolean;
+}
+
 // Wrapper sobre el WebSocket nativo con helpers tipados para enviar mensajes.
 // El parámetro opcional `to` (user_id) convierte el evento en privado (DM).
 export interface ChatSocket {
-  sendGroupMessage: (content: string) => void;
-  sendDM: (to: string, content: string) => void;
+  sendGroupMessage: (content: string, options?: SendMessageOptions) => void;
+  sendDM: (to: string, content: string, options?: SendMessageOptions) => void;
+  sendMarkRead: (messageId: string) => void;
   sendTyping: (to?: string) => void;
   sendStopTyping: (to?: string) => void;
   close: () => void;
@@ -130,11 +139,19 @@ const ChatService = {
       }
     };
 
+    // El servidor espera ttl solo si aplica y allow_read_receipt booleano.
+    const messageExtras = (options?: SendMessageOptions) => ({
+      ...(options?.ttl ? { ttl: options.ttl } : {}),
+      allow_read_receipt: options?.allowReadReceipt ?? true,
+    });
+
     return {
-      sendGroupMessage: (content: string) =>
-        send({ type: "group_message", content }),
-      sendDM: (to: string, content: string) =>
-        send({ type: "dm", to, content }),
+      sendGroupMessage: (content: string, options?: SendMessageOptions) =>
+        send({ type: "group_message", content, ...messageExtras(options) }),
+      sendDM: (to: string, content: string, options?: SendMessageOptions) =>
+        send({ type: "dm", to, content, ...messageExtras(options) }),
+      sendMarkRead: (messageId: string) =>
+        send({ type: "mark_read", message_id: messageId }),
       sendTyping: (to?: string) =>
         send(to ? { type: "typing", to } : { type: "typing" }),
       sendStopTyping: (to?: string) =>

@@ -19,6 +19,8 @@ import { useAppTheme } from "@/src/theme/ThemeProvider";
 interface AppHeaderProps {
   title?: string;
   subtitle?: string;
+  // Modo marca: muestra el logo de Planty arriba y el saludo abajo (home).
+  brand?: boolean;
   onAvatarPress: () => void;
 }
 
@@ -30,6 +32,7 @@ function getFirstName(fullName: string | undefined): string {
 export default function AppHeader({
   title,
   subtitle,
+  brand,
   onAvatarPress,
 }: AppHeaderProps) {
   const { colors, isDark } = useAppTheme();
@@ -43,16 +46,29 @@ export default function AppHeader({
 
   return (
     <View style={styles.container}>
-      <View style={styles.textBlock}>
-        <Text style={styles.title} numberOfLines={1}>
-          {displayTitle}
-        </Text>
-        {displaySubtitle ? (
-          <Text style={styles.subtitle} numberOfLines={1}>
-            {displaySubtitle}
+      {brand ? (
+        <View style={styles.textBlock}>
+          <Text style={styles.brandName} accessibilityLabel="Planty">
+            Planty
           </Text>
-        ) : null}
-      </View>
+          {title ? (
+            <Text style={styles.greeting} numberOfLines={1}>
+              {title}
+            </Text>
+          ) : null}
+        </View>
+      ) : (
+        <View style={styles.textBlock}>
+          <Text style={styles.title} numberOfLines={1}>
+            {displayTitle}
+          </Text>
+          {displaySubtitle ? (
+            <Text style={styles.subtitle} numberOfLines={1}>
+              {displaySubtitle}
+            </Text>
+          ) : null}
+        </View>
+      )}
       {/* Acciones rápidas en el header */}
       <View style={styles.actionsRow}>
         <Pressable
@@ -113,6 +129,22 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     textBlock: {
       flex: 1,
       gap: 2,
+    },
+    brandName: {
+      color: colors.primary,
+      fontFamily: Typography.family,
+      fontSize: 28,
+      fontWeight: "600",
+      fontStyle: "italic",
+      letterSpacing: -0.3,
+      lineHeight: 32,
+    },
+    greeting: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: Typography.caption.fontSize + 2,
+      fontWeight: "600",
+      lineHeight: Typography.caption.lineHeight + 2,
     },
     title: {
       color: colors.text,

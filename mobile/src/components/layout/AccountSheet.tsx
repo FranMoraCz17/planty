@@ -95,6 +95,13 @@ export default function AccountSheet({ visible, onClose }: AccountSheetProps) {
       onPress: () => navigate("/(app)/profile-details"),
     },
     {
+      key: "chat",
+      icon: "message-text-outline",
+      label: "Mensajería",
+      description: "Chat de la comunidad en tiempo real",
+      onPress: () => navigate("/(app)/chat"),
+    },
+    {
       key: "edit",
       icon: "pencil-outline",
       label: "Editar cuenta",

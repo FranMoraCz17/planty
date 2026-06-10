@@ -176,4 +176,98 @@ export const createStyles = (colors: ThemeColors, isDark: boolean) =>
       ...Typography.caption,
       color: colors.textSecondary,
     },
+    // ── Meta del mensaje (hora + checks + temporal) ─────────────────────────
+    metaRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.xs,
+      marginTop: 2,
+      marginHorizontal: Spacing.sm,
+    },
+    ttlBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 2,
+    },
+    // ── Menú de opciones del mensaje ────────────────────────────────────────
+    optionsBtn: {
+      width: 36,
+      height: 36,
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: BorderRadius.full,
+    },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.45)",
+      justifyContent: "flex-start",
+      alignItems: "flex-end",
+    },
+    optionsCard: {
+      marginTop: 64,
+      marginRight: Spacing.lg,
+      width: 290,
+      borderRadius: BorderRadius.lg,
+      backgroundColor: colors.surfaceCard,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      padding: Spacing.lg,
+      gap: Spacing.md,
+    },
+    optionsTitle: {
+      ...Typography.caption,
+      color: colors.textSecondary,
+      fontWeight: "700",
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    optionRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+    },
+    optionBody: { flex: 1 },
+    optionTitle: {
+      ...Typography.body,
+      color: colors.text,
+      fontWeight: "600",
+    },
+    optionSubtitle: {
+      ...Typography.caption,
+      color: colors.textSecondary,
+    },
+    optionValue: {
+      ...Typography.caption,
+      color: colors.primary,
+      fontWeight: "700",
+    },
+    ttlChips: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: Spacing.sm,
+    },
+    ttlChip: {
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.xs,
+      borderRadius: BorderRadius.full,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    ttlChipActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primary + "22",
+    },
+    ttlChipText: {
+      ...Typography.caption,
+      color: colors.textSecondary,
+    },
+    ttlChipTextActive: {
+      color: colors.primary,
+      fontWeight: "700",
+    },
+    optionDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
+    },
   });

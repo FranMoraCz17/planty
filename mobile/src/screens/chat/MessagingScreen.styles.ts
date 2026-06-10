@@ -117,4 +117,49 @@ export const createStyles = (colors: ThemeColors, _isDark: boolean) =>
       paddingVertical: Spacing.xl,
       paddingHorizontal: Spacing.lg,
     },
+    // ── Buscador de miembros ──
+    searchWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      marginHorizontal: Spacing.lg,
+      marginTop: Spacing.md,
+      paddingHorizontal: Spacing.md,
+      borderRadius: BorderRadius.full,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      backgroundColor: colors.surfaceCard,
+    },
+    searchInput: {
+      flex: 1,
+      ...Typography.body,
+      color: colors.text,
+      paddingVertical: Spacing.sm,
+    },
+    // ── Badge de no leídos ──
+    unreadBadge: {
+      minWidth: 20,
+      height: 20,
+      paddingHorizontal: 5,
+      borderRadius: BorderRadius.full,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    unreadBadgeText: {
+      ...Typography.caption,
+      color: colors.onPrimary,
+      fontWeight: "700",
+      fontSize: 11,
+      lineHeight: 13,
+    },
+    rowTime: {
+      ...Typography.caption,
+      color: colors.textSecondary,
+      fontSize: 11,
+    },
+    rowRight: {
+      alignItems: "flex-end",
+      gap: Spacing.xs,
+    },
   });

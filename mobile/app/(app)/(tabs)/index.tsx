@@ -80,7 +80,7 @@ export default function HomeTab() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <TopBar title={greetingLabel} subtitle="Tu jardin de hoy" />
+      <TopBar brand title={greetingLabel} subtitle="Tu jardin de hoy" />
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}

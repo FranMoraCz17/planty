@@ -13,6 +13,7 @@ import ChatService, {
   type ChatMessage,
   type ChatSocket,
   type ChatUser,
+  type SendMessageOptions,
 } from "@/src/services/chatService";
 
 export type ConnectionState = "connecting" | "online" | "offline";
@@ -21,6 +22,11 @@ export type ConnectionState = "connecting" | "online" | "offline";
 export type ChatConversation =
   | { kind: "group" }
   | { kind: "dm"; peerId: string };
+
+// Clave interna de conversación para mapas de estado.
+function convKey(conversation: ChatConversation): string {
+  return conversation.kind === "group" ? "group" : conversation.peerId;
+}
 
 interface ChatContextValue {
   connection: ConnectionState;
@@ -31,8 +37,12 @@ interface ChatContextValue {
   getThread: (peerId: string) => ChatMessage[];
   typingNickname: (conversation: ChatConversation) => string | null;
   userById: (id: string) => ChatUser | undefined;
-  sendGroup: (content: string) => void;
-  sendDM: (peerId: string, content: string) => void;
+  seenIds: Set<string>;
+  unreadCount: (conversation: ChatConversation) => number;
+  setActiveConversation: (conversation: ChatConversation | null) => void;
+  markIncomingRead: (messages: ChatMessage[]) => void;
+  sendGroup: (content: string, options?: SendMessageOptions) => void;
+  sendDM: (peerId: string, content: string, options?: SendMessageOptions) => void;
   notifyTyping: (conversation: ChatConversation) => void;
   loadDmHistory: (peerId: string) => void;
 }
@@ -56,10 +66,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [groupMessages, setGroupMessages] = useState<ChatMessage[]>([]);
   const [dmThreads, setDmThreads] = useState<Record<string, ChatMessage[]>>({});
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
+  // Ids de mis mensajes que el destinatario ya vio (doble check).
+  const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
+  // No leídos por conversación ("group" o peerId).
+  const [unread, setUnread] = useState<Record<string, number>>({});
 
   const socketRef = useRef<ChatSocket | null>(null);
   const tokenRef = useRef<string | null>(null);
   const myIdRef = useRef<string | null>(null);
+  // Conversación abierta ahora mismo: sus mensajes nuevos no cuentan como no leídos.
+  const activeConvRef = useRef<string | null>(null);
+  // Ids ya marcados como leídos para no repetir el evento mark_read.
+  const readSentRef = useRef<Set<string>>(new Set());
   // Timers para limpiar el indicador "escribiendo" de cada usuario.
   const clearTypingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   // Timers para dejar de enviar "escribiendo" propio por conversación.
@@ -91,6 +109,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 break;
               case "group_message":
                 setGroupMessages((prev) => upsert(prev, event.message));
+                if (
+                  event.message.sender_id !== myIdRef.current &&
+                  activeConvRef.current !== "group"
+                ) {
+                  setUnread((prev) => ({
+                    ...prev,
+                    group: (prev.group ?? 0) + 1,
+                  }));
+                }
                 break;
               case "dm": {
                 const msg = event.message;
@@ -103,8 +130,37 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                   ...prev,
                   [peer]: upsert(prev[peer] ?? [], msg),
                 }));
+                if (
+                  msg.sender_id !== myIdRef.current &&
+                  activeConvRef.current !== peer
+                ) {
+                  setUnread((prev) => ({
+                    ...prev,
+                    [peer]: (prev[peer] ?? 0) + 1,
+                  }));
+                }
                 break;
               }
+              case "message_seen":
+                setSeenIds((prev) => {
+                  const next = new Set(prev);
+                  next.add(event.message_id);
+                  return next;
+                });
+                break;
+              case "message_expired":
+                // Mensaje temporal vencido: desaparece de todas las listas.
+                setGroupMessages((prev) =>
+                  prev.filter((m) => m.id !== event.message_id),
+                );
+                setDmThreads((prev) => {
+                  const next: Record<string, ChatMessage[]> = {};
+                  for (const [peer, list] of Object.entries(prev)) {
+                    next[peer] = list.filter((m) => m.id !== event.message_id);
+                  }
+                  return next;
+                });
+                break;
               case "users_list":
                 setOnlineUsers(event.users);
                 break;
@@ -199,20 +255,63 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [typingUsers],
   );
 
-  const sendGroup = useCallback((content: string) => {
-    socketRef.current?.sendGroupMessage(content);
-    socketRef.current?.sendStopTyping();
+  const unreadCount = useCallback(
+    (conversation: ChatConversation) => unread[convKey(conversation)] ?? 0,
+    [unread],
+  );
+
+  // La pantalla de conversación avisa cuál hilo está abierto; al abrirlo
+  // se limpia su contador de no leídos.
+  const setActiveConversation = useCallback(
+    (conversation: ChatConversation | null) => {
+      const key = conversation ? convKey(conversation) : null;
+      activeConvRef.current = key;
+      if (key) {
+        setUnread((prev) => {
+          if (!prev[key]) return prev;
+          const next = { ...prev };
+          delete next[key];
+          return next;
+        });
+      }
+    },
+    [],
+  );
+
+  // Notifica al remitente que sus mensajes fueron vistos (doble check).
+  // Solo aplica a mensajes ajenos que permiten confirmación de lectura.
+  const markIncomingRead = useCallback((messages: ChatMessage[]) => {
+    const socket = socketRef.current;
+    if (!socket) return;
+    for (const msg of messages) {
+      if (msg.sender_id === myIdRef.current) continue;
+      if (msg.allow_read_receipt === false) continue;
+      if (readSentRef.current.has(msg.id)) continue;
+      readSentRef.current.add(msg.id);
+      socket.sendMarkRead(msg.id);
+    }
   }, []);
 
-  const sendDM = useCallback((peerId: string, content: string) => {
-    socketRef.current?.sendDM(peerId, content);
-    socketRef.current?.sendStopTyping(peerId);
-  }, []);
+  const sendGroup = useCallback(
+    (content: string, options?: SendMessageOptions) => {
+      socketRef.current?.sendGroupMessage(content, options);
+      socketRef.current?.sendStopTyping();
+    },
+    [],
+  );
+
+  const sendDM = useCallback(
+    (peerId: string, content: string, options?: SendMessageOptions) => {
+      socketRef.current?.sendDM(peerId, content, options);
+      socketRef.current?.sendStopTyping(peerId);
+    },
+    [],
+  );
 
   // Envía "escribiendo" y programa el "stop" automático tras la inactividad.
   const notifyTyping = useCallback((conversation: ChatConversation) => {
     const to = conversation.kind === "dm" ? conversation.peerId : undefined;
-    const key = to ?? "group";
+    const key = convKey(conversation);
     socketRef.current?.sendTyping(to);
     const timers = stopTypingTimers.current;
     if (timers[key]) clearTimeout(timers[key]);
@@ -248,6 +347,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       getThread,
       typingNickname,
       userById,
+      seenIds,
+      unreadCount,
+      setActiveConversation,
+      markIncomingRead,
       sendGroup,
       sendDM,
       notifyTyping,
@@ -262,6 +365,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       getThread,
       typingNickname,
       userById,
+      seenIds,
+      unreadCount,
+      setActiveConversation,
+      markIncomingRead,
       sendGroup,
       sendDM,
       notifyTyping,

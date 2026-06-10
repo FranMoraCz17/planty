@@ -15,16 +15,16 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://planty-f2zh.onrender.com",
-        "EXPO_PUBLIC_CHAT_APP": "https://chat-backend-mjfk.onrender.com",
-        "EXPO_PUBLIC_CHAT_WS_APP": "wss://chat-backend-mjfk.onrender.com"
+        "EXPO_PUBLIC_CHAT_APP": "https://chat-backend-4nzg.onrender.com",
+        "EXPO_PUBLIC_CHAT_WS_APP": "wss://chat-backend-4nzg.onrender.com"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_API_URL": "https://planty-f2zh.onrender.com",
-        "EXPO_PUBLIC_CHAT_APP": "https://chat-backend-mjfk.onrender.com",
-        "EXPO_PUBLIC_CHAT_WS_APP": "wss://chat-backend-mjfk.onrender.com"
+        "EXPO_PUBLIC_CHAT_APP": "https://chat-backend-4nzg.onrender.com",
+        "EXPO_PUBLIC_CHAT_WS_APP": "wss://chat-backend-4nzg.onrender.com"
       }
     }
   },
