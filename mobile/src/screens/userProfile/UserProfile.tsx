@@ -271,6 +271,23 @@ export default function UserProfile() {
 
           <Pressable
             accessibilityRole="button"
+            onPress={() => router.push("/(app)/chat" as never)}
+            style={({ pressed }) => [styles.menuRow, pressed && { opacity: 0.7 }]}
+          >
+            <View style={[styles.menuIconWrap, { backgroundColor: colors.accentCool + "22" }]}>
+              <MaterialCommunityIcons name="chat-outline" size={18} color={colors.accentCool} />
+            </View>
+            <View style={styles.menuBody}>
+              <Text style={styles.menuTitle}>Chat de la comunidad</Text>
+              <Text style={styles.menuSubtitle}>Conversa con otros usuarios en tiempo real</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={18} color={colors.textSecondary} />
+          </Pressable>
+
+          <View style={styles.menuDivider} />
+
+          <Pressable
+            accessibilityRole="button"
             onPress={() => router.push("/(app)/settings")}
             style={({ pressed }) => [styles.menuRow, pressed && { opacity: 0.7 }]}
           >
