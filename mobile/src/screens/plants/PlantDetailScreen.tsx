@@ -9,14 +9,19 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
   ActivityIndicator,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import GlassCard from "@/src/components/ui/GlassCard";
+import GlassChip from "@/src/components/ui/GlassChip";
 import StorageService from "@/src/services/storageService";
+import { usePlantPhoto } from "@/src/hooks/usePlantPhoto";
 import { useDemoData } from "@/src/data/DemoDataProvider";
 import IdentifyService from "@/src/services/identifyService";
 import DiagnoseService from "@/src/services/diagnoseService";
@@ -89,7 +94,16 @@ export default function PlantDetailScreen() {
       .catch(() => setDiagnoseHistory([]))
       .finally(() => setLoadingHistory(false));
   }, [plant?.id]);
-  const SCREEN_WIDTH = Dimensions.get("window").width - Spacing.lg * 2;
+
+  // Respaldo de foto: si la planta no tiene foto subida, usamos la de su
+  // especie desde Wikipedia (mismo hook que la Colección).
+  const { photoUri: speciesPhoto } = usePlantPhoto({
+    userPhotoUri: plant?.photoUri ?? null,
+    scientificName: plant?.scientificName ?? null,
+  });
+
+  // El héroe va a sangre completa: cada foto ocupa el ancho total de la ventana.
+  const PAGE_WIDTH = Dimensions.get("window").width;
 
   if (!plant) {
     return (
@@ -118,11 +132,14 @@ export default function PlantDetailScreen() {
         ? "Ver descripción"
         : "Sin datos";
 
-  // Todas las fotos: la principal + las adicionales, sin duplicados ni nulls
+  // Todas las fotos subidas: la principal + las adicionales, sin duplicados
   const allPhotos: string[] = [
     ...(plant.photoUri ? [plant.photoUri] : []),
     ...(plant.photos ?? []).filter((p) => p !== plant.photoUri),
   ];
+  // Fotos a mostrar en el héroe: las subidas, o el respaldo de la especie.
+  const displayPhotos =
+    allPhotos.length > 0 ? allPhotos : speciesPhoto ? [speciesPhoto] : [];
 
   const handleAddPhoto = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -161,7 +178,7 @@ export default function PlantDetailScreen() {
   };
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+    const idx = Math.round(e.nativeEvent.contentOffset.x / PAGE_WIDTH);
     setCarouselIndex(idx);
   };
 
@@ -262,110 +279,144 @@ export default function PlantDetailScreen() {
     }
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.headerBar}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Volver"
-          onPress={() => router.back()}
-          hitSlop={12}
-          style={({ pressed }) => [pressed && { opacity: 0.6 }]}
-        >
-          <MaterialCommunityIcons name="chevron-left" size={28} color={colors.text} />
-        </Pressable>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {plant.name}
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Editar planta"
-          onPress={() => router.push(`/(app)/forms/plant?mode=edit&plantId=${plant.id}`)}
-          hitSlop={12}
-          style={({ pressed }) => [pressed && { opacity: 0.6 }]}
-        >
-          <MaterialCommunityIcons name="pencil-outline" size={22} color={colors.primary} />
-        </Pressable>
-      </View>
+  const hasScientific =
+    plant.scientificName &&
+    plant.scientificName !== "Especie sin definir" &&
+    plant.scientificName !== "Especie sin definir";
 
+  return (
+    <View style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Carrusel de fotos */}
-        <View style={{ position: "relative" }}>
+        {/* ── HERO: foto arriba ── */}
+        <View style={styles.hero}>
           <ScrollView
             ref={carouselRef}
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             onMomentumScrollEnd={handleScroll}
-            style={{ borderRadius: BorderRadius.lg, overflow: "hidden" }}
           >
-            {allPhotos.length > 0 ? (
-              allPhotos.map((uri, i) => (
-                <View key={i} style={[styles.heroWrap, { width: SCREEN_WIDTH }]}>
-                  <Image source={{ uri }} style={styles.heroImage} />
-                </View>
+            {displayPhotos.length > 0 ? (
+              displayPhotos.map((uri, i) => (
+                <Image
+                  key={i}
+                  source={{ uri }}
+                  style={[styles.heroImage, { width: PAGE_WIDTH }]}
+                />
               ))
             ) : (
-              <View style={[styles.heroWrap, { width: SCREEN_WIDTH }]}>
-                <View style={styles.heroPlaceholder}>
-                  <MaterialCommunityIcons name="leaf" size={64} color={colors.onPrimary} />
-                </View>
+              <View style={[styles.heroPlaceholder, { width: PAGE_WIDTH }]}>
+                <MaterialCommunityIcons name="leaf" size={72} color={colors.onPrimary} />
               </View>
             )}
           </ScrollView>
 
-          {/* Badge IA */}
-          {plant.aiAnalyzed && (
-            <View style={styles.aiBadge}>
-              <MaterialCommunityIcons name="creation" size={12} color="#fff" />
-              <Text style={styles.aiBadgeText}>Analizado por IA</Text>
+          {/* Scrim superior para los botones */}
+          <LinearGradient
+            colors={["rgba(0,0,0,0.45)", "transparent"]}
+            locations={[0, 0.4]}
+            style={styles.heroTopScrim}
+            pointerEvents="none"
+          />
+
+          {/* Desvanecido inferior: la foto se disuelve en el fondo (truco yate) */}
+          <LinearGradient
+            colors={["transparent", colors.surface]}
+            locations={[0.5, 1]}
+            style={styles.heroBottomFade}
+            pointerEvents="none"
+          />
+
+          {/* Botones flotantes de cristal */}
+          <SafeAreaView edges={["top"]} style={styles.heroTopBar} pointerEvents="box-none">
+            <GlassButton
+              icon="chevron-left"
+              accessibilityLabel="Volver"
+              onPress={() => router.back()}
+            />
+            <View style={styles.heroTopRight}>
+              <GlassButton
+                icon={addingPhoto ? undefined : "camera-plus-outline"}
+                loading={addingPhoto}
+                accessibilityLabel="Agregar foto"
+                onPress={() => void handleAddPhoto()}
+              />
+              <GlassButton
+                icon="pencil-outline"
+                accessibilityLabel="Editar planta"
+                onPress={() => router.push(`/(app)/forms/plant?mode=edit&plantId=${plant.id}`)}
+              />
+            </View>
+          </SafeAreaView>
+
+          {/* Contador de fotos discreto */}
+          {displayPhotos.length > 1 && (
+            <View style={styles.photoCounter}>
+              <Text style={styles.photoCounterText}>
+                {carouselIndex + 1} / {displayPhotos.length}
+              </Text>
             </View>
           )}
-
-          {/* Indicadores de página */}
-          {allPhotos.length > 1 && (
-            <View style={styles.dotsRow}>
-              {allPhotos.map((_, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.dot,
-                    i === carouselIndex ? styles.dotActive : styles.dotInactive,
-                  ]}
-                />
-              ))}
-            </View>
-          )}
-
-          {/* Botón agregar foto */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Agregar foto"
-            onPress={() => void handleAddPhoto()}
-            disabled={addingPhoto}
-            style={({ pressed }) => [
-              styles.addPhotoBtn,
-              pressed && { opacity: 0.75 },
-            ]}
-          >
-            {addingPhoto ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <MaterialCommunityIcons name="camera-plus-outline" size={18} color="#fff" />
-            )}
-          </Pressable>
         </View>
 
-        {/* Identidad */}
-        <View style={styles.identityBlock}>
-          <Text style={styles.commonName}>{plant.name}</Text>
-          {plant.scientificName !== "Especie sin definir" && (
-            <Text style={styles.scientificName}>{plant.scientificName}</Text>
-          )}
+        {/* ── PANEL transparente (cristal) que sube sobre la foto ── */}
+        <View style={styles.panelWrap}>
+          <GlassCard radius={BorderRadius.lg} intensity={55}>
+            <View style={styles.panelInner}>
+              {plant.aiAnalyzed && <Text style={styles.aiOverline}>ANALIZADO POR IA</Text>}
+              <Text style={styles.commonName}>{plant.name}</Text>
+              {hasScientific && (
+                <Text style={styles.scientificName}>{plant.scientificName}</Text>
+              )}
+
+              {plant.locationName && plant.locationName !== "Sin ubicación" && (
+                <View style={styles.panelLocation}>
+                  <MaterialCommunityIcons
+                    name="map-marker-outline"
+                    size={15}
+                    color={colors.textSecondary}
+                  />
+                  <Text style={styles.panelLocationText}>{plant.locationName}</Text>
+                </View>
+              )}
+
+              <View style={styles.specsRow}>
+                <GlassChip icon="water-outline" value={wateringValue} />
+                <GlassChip icon="white-balance-sunny" value={plant.aiLight ?? "Sin datos"} />
+              </View>
+
+              {plant.aiAnalyzed && plant.aiDescription ? (
+                <Text style={styles.panelDescription} numberOfLines={4}>
+                  {plant.aiDescription}
+                </Text>
+              ) : null}
+
+              {/* CTA principal */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Diagnosticar salud"
+                onPress={handleDiagnose}
+                disabled={diagnosing}
+                style={({ pressed }) => [styles.cta, pressed && { opacity: 0.85 }]}
+              >
+                {diagnosing ? (
+                  <ActivityIndicator color={colors.onPrimary} />
+                ) : (
+                  <>
+                    <MaterialCommunityIcons
+                      name="stethoscope"
+                      size={18}
+                      color={colors.onPrimary}
+                    />
+                    <Text style={styles.ctaText}>Diagnosticar salud</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          </GlassCard>
         </View>
 
         {/* Descripción de IA o botón para analizar */}
@@ -419,7 +470,6 @@ export default function PlantDetailScreen() {
           <View style={styles.careGrid}>
             <CareCard
               icon="water-outline"
-              iconColor={colors.accentCool}
               label="Riego"
               value={wateringValue}
               detail={plant.aiWateringDetail}
@@ -428,7 +478,6 @@ export default function PlantDetailScreen() {
             />
             <CareCard
               icon="white-balance-sunny"
-              iconColor={colors.accentWarm}
               label="Luz"
               value={plant.aiLight ?? "Sin datos"}
               detail={plant.aiLightDetail}
@@ -443,38 +492,6 @@ export default function PlantDetailScreen() {
           )}
         </View>
 
-        {/* Diagnóstico de salud */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Diagnosticar salud de la planta"
-          onPress={handleDiagnose}
-          disabled={diagnosing}
-          style={({ pressed }) => [
-            styles.diagnoseCard,
-            pressed && { opacity: 0.85 },
-            diagnosing && { opacity: 0.7 },
-          ]}
-        >
-          {diagnosing ? (
-            <ActivityIndicator color={colors.accentWarm} />
-          ) : (
-            <MaterialCommunityIcons name="stethoscope" size={24} color={colors.accentWarm} />
-          )}
-          <View style={{ flex: 1 }}>
-            <Text style={styles.diagnoseTitle}>
-              {diagnosing ? "Diagnosticando..." : "Diagnosticar salud"}
-            </Text>
-            <Text style={styles.diagnoseSubtitle}>
-              {diagnosing
-                ? "La IA está analizando el estado de tu planta."
-                : "Detecta plagas, enfermedades y deficiencias con IA."}
-            </Text>
-          </View>
-          {!diagnosing && (
-            <MaterialCommunityIcons name="arrow-right" size={20} color={colors.accentWarm} />
-          )}
-        </Pressable>
-
         {/* Historial de diagnósticos */}
         {diagnoseHistory.length > 0 && (
           <View style={styles.section}>
@@ -485,20 +502,6 @@ export default function PlantDetailScreen() {
             {diagnoseHistory.map((entry, i) => (
               <DiagnoseEntry key={i} entry={entry} colors={colors} isDark={isDark} />
             ))}
-          </View>
-        )}
-
-        {/* Área */}
-        {plant.locationName && plant.locationName !== "Sin ubicación" && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MaterialCommunityIcons name="map-marker-outline" size={16} color={colors.primary} />
-              <Text style={styles.sectionTitle}>Ubicación</Text>
-            </View>
-            <View style={styles.locationRow}>
-              <MaterialCommunityIcons name="sprout" size={16} color={colors.textSecondary} />
-              <Text style={styles.locationText}>{plant.locationName}</Text>
-            </View>
           </View>
         )}
 
@@ -535,9 +538,58 @@ export default function PlantDetailScreen() {
 
         <View style={{ height: Spacing.xxl }} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
+
+// Botón circular de cristal para flotar sobre las fotos.
+function GlassButton({
+  icon,
+  onPress,
+  accessibilityLabel,
+  loading,
+}: {
+  icon?: IconName;
+  onPress: () => void;
+  accessibilityLabel: string;
+  loading?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      onPress={onPress}
+      disabled={loading}
+      style={({ pressed }) => [glassButtonStyles.btn, pressed && { opacity: 0.7 }]}
+    >
+      <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+      <View style={glassButtonStyles.tint} />
+      {loading ? (
+        <ActivityIndicator size="small" color="#fff" />
+      ) : (
+        <MaterialCommunityIcons name={icon ?? "circle-small"} size={22} color="#fff" />
+      )}
+    </Pressable>
+  );
+}
+
+const glassButtonStyles = StyleSheet.create({
+  btn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  tint: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.25)",
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.25)",
+  },
+});
 
 const HEALTH_COLOR: Record<string, string> = {
   saludable: "#16A34A",
@@ -620,18 +672,18 @@ const diagnoseEntryStyles = StyleSheet.create({
 });
 
 function CareCard({
-  icon, iconColor, label, value, detail, colors, isDark,
+  icon, label, value, detail, colors, isDark,
 }: {
-  icon: IconName; iconColor: string; label: string;
+  icon: IconName; label: string;
   value: string; detail?: string; colors: ThemeColors; isDark: boolean;
 }) {
   const s = createStyles(colors, isDark);
   return (
     <View style={s.careCard}>
-      <View style={[s.careIconWrap, { backgroundColor: iconColor + "22" }]}>
-        <MaterialCommunityIcons name={icon} size={18} color={iconColor} />
+      <View style={s.careHeaderRow}>
+        <MaterialCommunityIcons name={icon} size={15} color={colors.textSecondary} />
+        <Text style={s.careLabel}>{label}</Text>
       </View>
-      <Text style={s.careLabel}>{label}</Text>
       <Text style={s.careValue}>{value}</Text>
       {detail ? <Text style={s.careDetail}>{detail}</Text> : null}
     </View>
@@ -669,7 +721,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     emptyText: { color: colors.textSecondary, fontFamily: Typography.family, fontSize: 14 },
     headerBar: {
       flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-      paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, paddingBottom: Spacing.sm,
+      paddingHorizontal: Spacing.lg, paddingTop: Spacing.xxl, paddingBottom: Spacing.sm,
     },
     headerTitle: {
       color: colors.text, fontFamily: Typography.family,
@@ -677,39 +729,96 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       textAlign: "center", marginHorizontal: Spacing.sm,
     },
     content: { paddingHorizontal: Spacing.lg, paddingBottom: 40, gap: Spacing.lg },
-    heroWrap: {
-      width: "100%", aspectRatio: 16 / 10, borderRadius: BorderRadius.lg,
-      overflow: "hidden", backgroundColor: colors.primary, position: "relative",
+
+    // ── HERO a sangre ──
+    hero: {
+      marginHorizontal: -Spacing.lg,
+      height: 360,
+      position: "relative",
+      overflow: "hidden",
+      backgroundColor: colors.primary,
     },
-    heroImage: { width: "100%", height: "100%", resizeMode: "cover" },
-    heroPlaceholder: { flex: 1, alignItems: "center", justifyContent: "center" },
-    aiBadge: {
-      position: "absolute", top: Spacing.sm, left: Spacing.sm,
-      flexDirection: "row", alignItems: "center", gap: 4,
-      backgroundColor: "rgba(0,0,0,0.6)", paddingHorizontal: 10, paddingVertical: 4,
-      borderRadius: BorderRadius.full, borderWidth: 1,
-      borderColor: "rgba(163,230,53,0.4)",
+    heroImage: { height: 360, resizeMode: "cover" },
+    heroPlaceholder: {
+      height: 360, alignItems: "center", justifyContent: "center",
+      backgroundColor: colors.primary,
     },
-    aiBadgeText: {
-      color: "#fff", fontFamily: Typography.family, fontSize: 11, fontWeight: "700",
+    heroTopScrim: {
+      position: "absolute", top: 0, left: 0, right: 0, height: 130, zIndex: 1,
     },
-    identityBlock: { gap: 4 },
+    heroBottomFade: {
+      position: "absolute", left: 0, right: 0, bottom: 0, height: 200, zIndex: 1,
+    },
+    heroTopBar: {
+      position: "absolute", top: 0, left: 0, right: 0,
+      flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between",
+      paddingHorizontal: Spacing.lg, zIndex: 3,
+    },
+    heroTopRight: { flexDirection: "row", gap: Spacing.sm },
+    photoCounter: {
+      position: "absolute", top: 60, left: 0, right: 0,
+      alignItems: "center", zIndex: 2,
+    },
+    photoCounterText: {
+      color: "#fff", fontFamily: Typography.family, fontSize: 12, fontWeight: "700",
+      backgroundColor: "rgba(0,0,0,0.35)", paddingHorizontal: 10, paddingVertical: 3,
+      borderRadius: BorderRadius.full, overflow: "hidden",
+    },
+
+    // ── Panel de cristal que sube sobre la foto ──
+    panelWrap: {
+      marginTop: -72,
+      zIndex: 2,
+    },
+    panelInner: {
+      padding: Spacing.lg,
+      gap: 4,
+    },
+    aiOverline: { ...Typography.overline, color: colors.primary, marginBottom: 2 },
     commonName: {
-      color: colors.text, fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize + 10, fontWeight: "800", letterSpacing: -0.5,
+      color: colors.text, fontFamily: Typography.serif,
+      fontSize: 32, fontWeight: "700", letterSpacing: -0.5, lineHeight: 36,
     },
     scientificName: {
-      color: colors.textSecondary, fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize, fontStyle: "italic",
+      color: colors.textSecondary, fontFamily: Typography.serif,
+      fontSize: 15, fontStyle: "italic",
     },
+    panelLocation: {
+      flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4,
+    },
+    panelLocationText: {
+      color: colors.textSecondary, fontFamily: Typography.family,
+      fontSize: 13, fontWeight: "600",
+    },
+    specsRow: {
+      flexDirection: "row", gap: Spacing.sm, marginTop: Spacing.md, flexWrap: "wrap",
+    },
+    panelDescription: {
+      color: colors.textSecondary, fontFamily: Typography.family,
+      fontSize: 14, lineHeight: 21, marginTop: Spacing.md,
+    },
+    cta: {
+      marginTop: Spacing.lg, height: 52, borderRadius: BorderRadius.full,
+      backgroundColor: colors.primary, flexDirection: "row",
+      alignItems: "center", justifyContent: "center", gap: Spacing.sm,
+    },
+    ctaText: {
+      color: colors.onPrimary, fontFamily: Typography.family,
+      fontSize: 16, fontWeight: "700",
+    },
+
+    // ── Secciones translúcidas flotantes ──
     section: {
-      backgroundColor: colors.surfaceCard, borderRadius: BorderRadius.lg,
-      borderWidth: 1, borderColor: colors.border, padding: Spacing.lg, gap: Spacing.sm,
+      backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.6)",
+      borderRadius: BorderRadius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.06)",
+      padding: Spacing.lg, gap: Spacing.sm,
     },
     sectionHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
     sectionTitle: {
       color: colors.text, fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize + 1, fontWeight: "800",
+      fontSize: Typography.body.fontSize + 1, fontWeight: "700",
     },
     bodyText: {
       color: colors.text, fontFamily: Typography.family,
@@ -717,14 +826,14 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     analyzeCard: {
       flexDirection: "row", alignItems: "center", gap: Spacing.md,
-      backgroundColor: isDark ? "#0F2318" : "#F0FDF4",
-      borderRadius: BorderRadius.lg, borderWidth: 1.5,
-      borderColor: isDark ? "#1A4028" : "#BBF7D0",
+      backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.6)",
+      borderRadius: BorderRadius.lg, borderWidth: StyleSheet.hairlineWidth,
+      borderColor: isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.06)",
       padding: Spacing.lg,
     },
     analyzeTitle: {
       color: colors.text, fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize, fontWeight: "800",
+      fontSize: Typography.body.fontSize, fontWeight: "700",
     },
     analyzeSubtitle: {
       color: colors.textSecondary, fontFamily: Typography.family,
@@ -732,21 +841,20 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     careGrid: { flexDirection: "row", gap: Spacing.sm },
     careCard: {
-      flex: 1, backgroundColor: isDark ? "#1A1A1A" : "#F9FAFB",
-      borderRadius: BorderRadius.md, borderWidth: 1, borderColor: colors.border,
+      flex: 1,
+      backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.03)",
+      borderRadius: BorderRadius.md, borderWidth: StyleSheet.hairlineWidth,
+      borderColor: isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.06)",
       padding: Spacing.md, gap: 4,
     },
-    careIconWrap: {
-      width: 32, height: 32, borderRadius: BorderRadius.full,
-      alignItems: "center", justifyContent: "center", marginBottom: 4,
-    },
+    careHeaderRow: { flexDirection: "row", alignItems: "center", gap: 6 },
     careLabel: {
       color: colors.textSecondary, fontFamily: Typography.family,
       fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4,
     },
     careValue: {
       color: colors.text, fontFamily: Typography.family,
-      fontSize: 14, fontWeight: "800",
+      fontSize: 15, fontWeight: "700",
     },
     careDetail: {
       color: colors.textSecondary, fontFamily: Typography.family,
@@ -755,40 +863,5 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     careHint: {
       color: colors.textSecondary, fontFamily: Typography.family,
       fontSize: 12, fontStyle: "italic", textAlign: "center", marginTop: 2,
-    },
-    diagnoseCard: {
-      flexDirection: "row", alignItems: "center", gap: Spacing.md,
-      backgroundColor: isDark ? "#1A0F00" : "#FFFBF0",
-      borderRadius: BorderRadius.lg, borderWidth: 1.5,
-      borderColor: isDark ? "#3B2A10" : "#FDE68A",
-      padding: Spacing.lg,
-    },
-    diagnoseTitle: {
-      color: colors.text, fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize, fontWeight: "800",
-    },
-    diagnoseSubtitle: {
-      color: colors.textSecondary, fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1, marginTop: 2, lineHeight: 18,
-    },
-    locationRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-    locationText: {
-      color: colors.text, fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize, fontWeight: "600",
-    },
-    dotsRow: {
-      position: "absolute", bottom: Spacing.sm,
-      left: 0, right: 0, flexDirection: "row",
-      justifyContent: "center", alignItems: "center", gap: 5,
-    },
-    dot: { borderRadius: 99 },
-    dotActive: { width: 18, height: 6, backgroundColor: "#fff" },
-    dotInactive: { width: 6, height: 6, backgroundColor: "rgba(255,255,255,0.45)" },
-    addPhotoBtn: {
-      position: "absolute", bottom: Spacing.sm, right: Spacing.sm,
-      width: 34, height: 34, borderRadius: 17,
-      backgroundColor: "rgba(0,0,0,0.55)",
-      alignItems: "center", justifyContent: "center",
-      borderWidth: 1, borderColor: "rgba(255,255,255,0.25)",
     },
   });

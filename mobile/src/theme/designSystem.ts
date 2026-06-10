@@ -1,35 +1,46 @@
+import { Platform } from "react-native";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Planty — Sistema de diseño "Herbario"
+// Dirección: editorial botánico premium. Tinta + papel + un verde de autor.
+// Tipografía serif para títulos (aire de ficha de museo), sans para el resto.
+// Esquinas cuadradas tipo iOS, bordes hairline, sin círculos de color decorativos.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Papel — modo claro cálido, sobrio.
 export const LightColors = {
-  primary: "#10B981",
-  secondary: "#34D399",
-  surface: "#FAFAFA",
-  text: "#0A0A0A",
-  error: "#EF4444",
-  disabled: "#A1A1AA",
-  pressed: "#059669",
-  onPrimary: "#FFFFFF",
-  textSecondary: "#52525B",
-  surfaceCard: "#FFFFFF",
-  border: "#E4E4E7",
-  accentWarm: "#F59E0B",
-  accentCool: "#06B6D4",
-  accentLavender: "#8B5CF6",
+  primary: "#2F6B4F", // verde bosque profundo (no el mint tech anterior)
+  secondary: "#3E8E6A",
+  surface: "#F4F1EA", // papel cálido (no blanco puro)
+  text: "#1B1D18", // tinta cálida casi negra
+  error: "#A63A2E", // ladrillo apagado
+  disabled: "#A8A6A0",
+  pressed: "#24543E",
+  onPrimary: "#FBFAF6",
+  textSecondary: "#6E6F66",
+  surfaceCard: "#FBF9F3", // panel apenas más claro que el papel
+  border: "#E3DFD4", // hairline cálido
+  accentWarm: "#B07C3A", // ocre apagado — solo señal semántica
+  accentCool: "#3F6E78", // pizarra fría apagada
+  accentLavender: "#6E6597",
 } as const;
 
+// Modo oscuro — protagonista en OLED. Negro cálido + verde luminoso.
 export const DarkColors = {
-  primary: "#A3E635",
-  secondary: "#84CC16",
-  surface: "#0A0A0A",
-  text: "#FAFAFA",
-  error: "#F87171",
-  disabled: "#52525B",
-  pressed: "#65A30D",
-  onPrimary: "#0A0A0A",
-  textSecondary: "#A1A1AA",
-  surfaceCard: "#161616",
-  border: "#27272A",
-  accentWarm: "#FBBF24",
-  accentCool: "#22D3EE",
-  accentLavender: "#A78BFA",
+  primary: "#6FBF95", // verde botánico luminoso (reemplaza el lima neón)
+  secondary: "#4FAE83",
+  surface: "#0C0E0B", // negro verdoso profundo
+  text: "#ECEAE0", // blanco roto cálido
+  error: "#E1786B", // coral apagado
+  disabled: "#4A4D44",
+  pressed: "#57A37C",
+  onPrimary: "#0A0F0B", // texto oscuro sobre botón verde claro
+  textSecondary: "#9DA093",
+  surfaceCard: "#15170F", // panel elevado cálido
+  border: "#262922", // borde sutil cálido
+  accentWarm: "#D8A55A",
+  accentCool: "#6FA8B5",
+  accentLavender: "#A89BD6",
 } as const;
 
 export type ThemeMode = "light" | "dark";
@@ -42,18 +53,36 @@ export const getThemeColors = (mode: ThemeMode): ThemeColors =>
 
 export const Colors = LightColors;
 
+// Familia serif del sistema para títulos y nombres de especie (estilo editorial).
+// Georgia está presente en iOS y web; "serif" cubre Android.
+const SerifFamily = Platform.select({
+  ios: "Georgia",
+  android: "serif",
+  default: "Georgia",
+}) as string;
+
+export const Fonts = {
+  sans: "System",
+  serif: SerifFamily,
+} as const;
+
 export const Typography = {
   family: "System",
+  serif: SerifFamily,
+  // Títulos editoriales en serif.
   display: {
+    fontFamily: SerifFamily,
     fontSize: 34,
-    fontWeight: "800" as const,
+    fontWeight: "700" as const,
     lineHeight: 40,
   },
   title: {
+    fontFamily: SerifFamily,
     fontSize: 26,
     fontWeight: "700" as const,
     lineHeight: 32,
   },
+  // Subtítulos y cuerpo en sans para legibilidad.
   subtitle: {
     fontSize: 20,
     fontWeight: "700" as const,
@@ -69,6 +98,13 @@ export const Typography = {
     fontWeight: "400" as const,
     lineHeight: 16,
   },
+  // Etiqueta editorial: minúsculas espaciadas para overlines.
+  overline: {
+    fontSize: 11,
+    fontWeight: "700" as const,
+    lineHeight: 14,
+    letterSpacing: 1.2,
+  },
 } as const;
 
 export const Spacing = {
@@ -81,16 +117,18 @@ export const Spacing = {
   xxxl: 48,
 } as const;
 
+// Radios cuadrados tipo iOS (antes llegaban a 28 — demasiado redondo/infantil).
 export const BorderRadius = {
   sm: 6,
-  md: 12,
-  lg: 20,
-  xl: 28,
+  md: 10,
+  lg: 14,
+  xl: 20,
   full: 999,
 } as const;
 
 export const DesignSystem = {
   Colors,
+  Fonts,
   Typography,
   Spacing,
   BorderRadius,
