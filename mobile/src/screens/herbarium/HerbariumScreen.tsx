@@ -13,6 +13,9 @@ import {
 } from "react-native";
 import { useDemoData } from "@/src/data/DemoDataProvider";
 import type { PlantDocument } from "@/src/services/plantService";
+import PhotoDetailSheet from "@/src/components/ui/PhotoDetailSheet";
+import GlassChip from "@/src/components/ui/GlassChip";
+import { usePlantPhoto } from "@/src/hooks/usePlantPhoto";
 import {
   BorderRadius,
   Spacing,
@@ -76,6 +79,11 @@ export default function HerbariumScreen() {
   const entries = buildEntries(plants);
 
   const [selected, setSelected] = useState<HerbariumEntry | null>(null);
+
+  // Respaldo de foto por especie (Wikipedia) si la foto subida falla al cargar.
+  const { photoUri: speciesFallback } = usePlantPhoto({
+    scientificName: selected?.scientificName,
+  });
 
   return (
     <SafeAreaView style={styles.container}>
@@ -159,104 +167,86 @@ export default function HerbariumScreen() {
         </ScrollView>
       )}
 
-      {/* Modal de detalle de ficha */}
+      {/* Detalle de ficha — patrón yate (foto a sangre + hoja de cristal) */}
       <Modal
         visible={selected !== null}
         animationType="slide"
-        presentationStyle="pageSheet"
+        presentationStyle="fullScreen"
+        statusBarTranslucent
         onRequestClose={() => setSelected(null)}
       >
         {selected && (
-          <SafeAreaView style={[styles.container, { flex: 1 }]}>
-            <View style={styles.modalHeader}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Cerrar ficha"
-                onPress={() => setSelected(null)}
-                hitSlop={12}
-              >
-                <MaterialCommunityIcons name="close" size={24} color={colors.text} />
-              </Pressable>
-              <Text style={styles.modalHeaderTitle} numberOfLines={1}>{selected.name}</Text>
-              <View style={{ width: 24 }} />
+          <PhotoDetailSheet
+            photoUri={selected.photoUri ?? null}
+            fallbackUri={speciesFallback}
+            placeholderIcon="leaf"
+            closeIcon="close"
+            onClose={() => setSelected(null)}
+          >
+            <Text style={styles.sheetOverline}>FICHA DE HERBARIO</Text>
+            <Text style={styles.sheetName}>{selected.name}</Text>
+            {selected.scientificName ? (
+              <Text style={styles.sheetScientific}>{selected.scientificName}</Text>
+            ) : null}
+
+            <View style={styles.sheetChips}>
+              <GlassChip
+                icon="sprout-outline"
+                value={String(selected.count)}
+                label={selected.count === 1 ? "planta" : "plantas"}
+              />
+              {selected.discoveredAt ? (
+                <GlassChip
+                  icon="calendar-outline"
+                  value={new Date(selected.discoveredAt).toLocaleDateString("es-CR", {
+                    day: "numeric",
+                    month: "short",
+                  })}
+                />
+              ) : null}
+              <GlassChip
+                icon="creation"
+                value={selected.aiDescription ? "Sí" : "No"}
+                label="IA"
+              />
             </View>
 
-            <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
-              {/* Foto grande */}
-              <View style={styles.modalPhotoWrap}>
-                {selected.photoUri ? (
-                  <Image source={{ uri: selected.photoUri }} style={styles.modalPhoto} />
-                ) : (
-                  <View style={[styles.modalPhoto, styles.modalPhotoPlaceholder]}>
-                    <MaterialCommunityIcons name="leaf" size={64} color={colors.onPrimary} />
-                  </View>
-                )}
-                <View style={styles.modalPhotoOverlay} />
-                <View style={styles.modalPhotoIdentity}>
-                  <Text style={styles.modalName}>{selected.name}</Text>
-                  {selected.scientificName && (
-                    <Text style={styles.modalScientific}>{selected.scientificName}</Text>
-                  )}
+            {selected.aiDescription ? (
+              <View style={styles.sheetSection}>
+                <View style={styles.sheetSectionHeader}>
+                  <MaterialCommunityIcons name="creation" size={16} color={colors.primary} />
+                  <Text style={styles.sheetSectionTitle}>Descripción botánica</Text>
                 </View>
+                <Text style={styles.sheetBody}>{selected.aiDescription}</Text>
               </View>
+            ) : null}
 
-              {/* Stats */}
-              <View style={styles.statsRow}>
-                <View style={styles.statItem}>
-                  <Text style={styles.statValue}>{selected.count}</Text>
-                  <Text style={styles.statLabel}>{selected.count === 1 ? "Planta" : "Plantas"}</Text>
+            {selected.aiLight ? (
+              <View style={styles.sheetSection}>
+                <View style={styles.sheetSectionHeader}>
+                  <MaterialCommunityIcons
+                    name="white-balance-sunny"
+                    size={16}
+                    color={colors.accentWarm}
+                  />
+                  <Text style={styles.sheetSectionTitle}>Luz recomendada</Text>
                 </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Text style={styles.statValue}>
-                    {selected.aiDescription ? "Sí" : "No"}
-                  </Text>
-                  <Text style={styles.statLabel}>IA analizada</Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statItem}>
-                  <Text style={styles.statValue} numberOfLines={1}>
-                    {selected.discoveredAt
-                      ? new Date(selected.discoveredAt).toLocaleDateString("es-CR", { day: "numeric", month: "short" })
-                      : "—"}
-                  </Text>
-                  <Text style={styles.statLabel}>Descubierta</Text>
-                </View>
+                <Text style={styles.sheetBody}>{selected.aiLight}</Text>
               </View>
+            ) : null}
 
-              {/* Descripción IA */}
-              {selected.aiDescription && (
-                <View style={styles.infoCard}>
-                  <View style={styles.infoCardHeader}>
-                    <MaterialCommunityIcons name="creation" size={14} color={colors.primary} />
-                    <Text style={styles.infoCardTitle}>Descripción botánica</Text>
-                  </View>
-                  <Text style={styles.infoCardBody}>{selected.aiDescription}</Text>
-                </View>
-              )}
-
-              {/* Cuidados */}
-              {selected.aiLight && (
-                <View style={styles.infoCard}>
-                  <View style={styles.infoCardHeader}>
-                    <MaterialCommunityIcons name="white-balance-sunny" size={14} color={colors.accentWarm} />
-                    <Text style={styles.infoCardTitle}>Luz recomendada</Text>
-                  </View>
-                  <Text style={styles.infoCardBody}>{selected.aiLight}</Text>
-                </View>
-              )}
-
-              {/* Fecha de descubrimiento */}
-              <View style={styles.infoCard}>
-                <View style={styles.infoCardHeader}>
-                  <MaterialCommunityIcons name="calendar-outline" size={14} color={colors.textSecondary} />
-                  <Text style={styles.infoCardTitle}>Primera vez en tu colección</Text>
-                </View>
-                <Text style={styles.infoCardBody}>{formatDate(selected.discoveredAt)}</Text>
+            <View style={styles.sheetSection}>
+              <View style={styles.sheetSectionHeader}>
+                <MaterialCommunityIcons
+                  name="calendar-outline"
+                  size={16}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.sheetSectionTitle}>Primera vez en tu colección</Text>
               </View>
-
-            </ScrollView>
-          </SafeAreaView>
+              <Text style={styles.sheetBody}>{formatDate(selected.discoveredAt)}</Text>
+            </View>
+          </PhotoDetailSheet>
         )}
       </Modal>
     </SafeAreaView>
@@ -375,109 +365,51 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontSize: 9,
       fontStyle: "italic",
     },
-    // Modal
-    modalHeader: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingHorizontal: Spacing.lg,
-      paddingVertical: Spacing.sm,
+    // ── Contenido de la hoja de cristal (patrón yate) ──
+    sheetOverline: {
+      ...Typography.overline,
+      color: colors.primary,
+      marginBottom: 2,
     },
-    modalHeaderTitle: {
+    sheetName: {
+      color: colors.text,
+      fontFamily: Typography.serif,
+      fontSize: 32,
+      fontWeight: "700",
+      letterSpacing: -0.5,
+      lineHeight: 36,
+    },
+    sheetScientific: {
+      color: colors.textSecondary,
+      fontFamily: Typography.serif,
+      fontSize: 15,
+      fontStyle: "italic",
+    },
+    sheetChips: {
+      flexDirection: "row",
+      gap: Spacing.sm,
+      marginTop: Spacing.sm,
+      flexWrap: "wrap",
+    },
+    sheetSection: {
+      backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.6)",
+      borderRadius: BorderRadius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.06)",
+      padding: Spacing.lg,
+      gap: Spacing.sm,
+    },
+    sheetSectionHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
+    sheetSectionTitle: {
       color: colors.text,
       fontFamily: Typography.family,
       fontSize: Typography.body.fontSize + 1,
-      fontWeight: "800",
-      flex: 1,
-      textAlign: "center",
-    },
-    modalContent: {
-      paddingBottom: 60,
-      gap: Spacing.md,
-    },
-    modalPhotoWrap: {
-      width: "100%",
-      height: 260,
-      position: "relative",
-      backgroundColor: isDark ? "#143018" : "#DCFCE7",
-    },
-    modalPhoto: { width: "100%", height: "100%", resizeMode: "cover" },
-    modalPhotoPlaceholder: { alignItems: "center", justifyContent: "center", backgroundColor: colors.primary },
-    modalPhotoOverlay: {
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: "rgba(0,0,0,0.45)",
-    },
-    modalPhotoIdentity: {
-      position: "absolute",
-      bottom: Spacing.lg,
-      left: Spacing.lg,
-      right: Spacing.lg,
-      gap: 4,
-    },
-    modalName: {
-      color: "#fff",
-      fontFamily: Typography.family,
-      fontSize: 26,
-      fontWeight: "800",
-      letterSpacing: -0.5,
-      textShadowColor: "rgba(0,0,0,0.5)",
-      textShadowOffset: { width: 0, height: 1 },
-      textShadowRadius: 4,
-    },
-    modalScientific: {
-      color: "rgba(255,255,255,0.8)",
-      fontFamily: Typography.family,
-      fontSize: 14,
-      fontStyle: "italic",
-    },
-    statsRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      marginHorizontal: Spacing.lg,
-      backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      paddingVertical: Spacing.md,
-    },
-    statItem: { flex: 1, alignItems: "center", gap: 2 },
-    statDivider: { width: 1, height: 32, backgroundColor: colors.border },
-    statValue: {
-      color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: 20,
-      fontWeight: "800",
-    },
-    statLabel: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: 11,
-      fontWeight: "600",
-      textTransform: "uppercase",
-      letterSpacing: 0.3,
-    },
-    infoCard: {
-      marginHorizontal: Spacing.lg,
-      backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: Spacing.md,
-      gap: Spacing.xs,
-    },
-    infoCardHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
-    infoCardTitle: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: 11,
       fontWeight: "700",
-      textTransform: "uppercase",
-      letterSpacing: 0.4,
     },
-    infoCardBody: {
+    sheetBody: {
       color: colors.text,
       fontFamily: Typography.family,
-      fontSize: 13,
-      lineHeight: 20,
+      fontSize: Typography.body.fontSize - 1,
+      lineHeight: 22,
     },
   });

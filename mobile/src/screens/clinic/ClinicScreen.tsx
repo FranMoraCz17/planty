@@ -18,6 +18,7 @@ import {
   View,
 } from "react-native";
 import { useDemoData } from "@/src/data/DemoDataProvider";
+import DayStrip from "@/src/components/ui/DayStrip";
 import DiagnoseService from "@/src/services/diagnoseService";
 import {
   getDiagnosesByPlant,

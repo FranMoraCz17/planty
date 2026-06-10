@@ -10,6 +10,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useDemoData } from "@/src/data/DemoDataProvider";
 import type {
   AreaDocument,
@@ -93,7 +94,7 @@ export default function AreasScreen() {
             color={colors.text}
           />
         </Pressable>
-        <Text style={styles.headerTitle}>Areas</Text>
+        <Text style={styles.headerTitle}>Áreas</Text>
         <View style={{ width: 28 }} />
       </View>
 
@@ -101,6 +102,29 @@ export default function AreasScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        {/* Card editorial para crear una nueva área */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Crear nueva área"
+          onPress={() => router.push("/(app)/forms/area")}
+          style={({ pressed }) => [styles.newAreaCard, pressed && { opacity: 0.7 }]}
+        >
+          <View style={styles.newAreaIcon}>
+            <MaterialCommunityIcons name="plus" size={22} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.newAreaTitle}>Nueva área</Text>
+            <Text style={styles.newAreaSubtitle}>
+              Un espacio para organizar tus plantas
+            </Text>
+          </View>
+          <MaterialCommunityIcons
+            name="chevron-right"
+            size={20}
+            color={colors.textSecondary}
+          />
+        </Pressable>
+
         {areas.length === 0 ? (
           <View style={styles.emptyWrap}>
             <MaterialCommunityIcons
@@ -108,9 +132,10 @@ export default function AreasScreen() {
               size={48}
               color={colors.textSecondary}
             />
-            <Text style={styles.emptyTitle}>Sin areas todavia</Text>
+            <Text style={styles.emptyTitle}>Sin áreas todavía</Text>
             <Text style={styles.emptyText}>
-              Crea espacios fisicos (sala, patio, invernadero) para organizar tus plantas y recibir mejores recomendaciones.
+              Crea espacios físicos (sala, patio, invernadero) para organizar tus
+              plantas y recibir mejores recomendaciones.
             </Text>
           </View>
         ) : (
@@ -129,15 +154,6 @@ export default function AreasScreen() {
           })
         )}
       </ScrollView>
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Crear area"
-        onPress={() => router.push("/(app)/forms/area")}
-        style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
-      >
-        <MaterialCommunityIcons name="plus" size={24} color={colors.onPrimary} />
-      </Pressable>
     </SafeAreaView>
   );
 }
@@ -159,12 +175,9 @@ function AreaCard({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Ver area ${area.name}`}
+      accessibilityLabel={`Ver área ${area.name}`}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.areaCard,
-        pressed && { opacity: 0.85 },
-      ]}
+      style={({ pressed }) => [styles.areaCard, pressed && { opacity: 0.9 }]}
     >
       <View style={styles.areaPhotoWrap}>
         {area.photoUri ? (
@@ -173,29 +186,33 @@ function AreaCard({
           <View style={styles.areaPhotoPlaceholder}>
             <MaterialCommunityIcons
               name={TYPE_ICON[area.type]}
-              size={48}
+              size={52}
               color={colors.onPrimary}
             />
           </View>
         )}
 
-        {/* Overlay degradado para legibilidad */}
-        <View style={styles.areaPhotoOverlay} />
+        {/* Degradado suave para legibilidad del título (estilo editorial) */}
+        <LinearGradient
+          colors={["transparent", "rgba(0,0,0,0.78)"]}
+          locations={[0.35, 1]}
+          style={styles.areaScrim}
+          pointerEvents="none"
+        />
 
         {/* Tipo arriba a la izquierda */}
-        <View style={styles.areaTypeBadge}>
+        <View style={[styles.areaTopBadge, styles.areaTopLeft]}>
           <MaterialCommunityIcons
             name={TYPE_ICON[area.type]}
             size={12}
             color="#FFFFFF"
           />
-          <Text style={styles.areaTypeBadgeText}>{TYPE_LABEL[area.type]}</Text>
+          <Text style={styles.areaTopBadgeText}>{TYPE_LABEL[area.type]}</Text>
         </View>
 
         {/* Cantidad arriba a la derecha */}
-        <View style={styles.areaBadge}>
-          <MaterialCommunityIcons name="leaf" size={12} color="#FFFFFF" />
-          <Text style={styles.areaBadgeText}>
+        <View style={[styles.areaTopBadge, styles.areaTopRight]}>
+          <Text style={styles.areaCountText}>
             {plantCount} {plantCount === 1 ? "planta" : "plantas"}
           </Text>
         </View>
@@ -212,6 +229,7 @@ function AreaCard({
           ) : null}
         </View>
       </View>
+
       <View style={styles.areaBody}>
         {area.description ? (
           <Text style={styles.areaDescription} numberOfLines={2}>
@@ -222,28 +240,24 @@ function AreaCard({
           <View style={styles.areaMetaChip}>
             <MaterialCommunityIcons
               name={LIGHT_ICON[area.lightLevel]}
-              size={12}
-              color={colors.primary}
+              size={13}
+              color={colors.textSecondary}
             />
-            <Text style={styles.areaMetaText}>
-              {LIGHT_LABEL[area.lightLevel]}
-            </Text>
+            <Text style={styles.areaMetaText}>{LIGHT_LABEL[area.lightLevel]}</Text>
           </View>
           <View style={styles.areaMetaChip}>
             <MaterialCommunityIcons
               name="water-percent"
-              size={12}
-              color={colors.primary}
+              size={13}
+              color={colors.textSecondary}
             />
-            <Text style={styles.areaMetaText}>
-              Humedad {area.humidityLevel}
-            </Text>
+            <Text style={styles.areaMetaText}>Humedad {area.humidityLevel}</Text>
           </View>
           <View style={styles.areaMetaChip}>
             <MaterialCommunityIcons
               name={area.indoor ? "home" : "tree"}
-              size={12}
-              color={colors.primary}
+              size={13}
+              color={colors.textSecondary}
             />
             <Text style={styles.areaMetaText}>
               {area.indoor ? "Interior" : "Exterior"}
@@ -270,16 +284,49 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       paddingBottom: Spacing.sm,
     },
     headerTitle: {
+      ...Typography.title,
       color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize + 2,
-      fontWeight: "800",
     },
     content: {
       paddingHorizontal: Spacing.lg,
       paddingBottom: 130,
       gap: Spacing.md,
     },
+
+    // ── Card "nueva área" ──
+    newAreaCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      backgroundColor: colors.surfaceCard,
+      borderRadius: BorderRadius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.primary,
+      borderStyle: "dashed",
+      padding: Spacing.md,
+    },
+    newAreaIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: BorderRadius.md,
+      backgroundColor: isDark ? "rgba(111,191,149,0.14)" : "rgba(47,107,79,0.10)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    newAreaTitle: {
+      color: colors.text,
+      fontFamily: Typography.family,
+      fontSize: Typography.body.fontSize,
+      fontWeight: "700",
+    },
+    newAreaSubtitle: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: Typography.caption.fontSize + 1,
+      fontWeight: "500",
+      marginTop: 1,
+    },
+
     emptyWrap: {
       alignItems: "center",
       justifyContent: "center",
@@ -300,16 +347,18 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       textAlign: "center",
       maxWidth: 280,
     },
+
+    // ── Card de área ──
     areaCard: {
       backgroundColor: colors.surfaceCard,
       borderRadius: BorderRadius.lg,
-      borderWidth: 1,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
       overflow: "hidden",
     },
     areaPhotoWrap: {
       width: "100%",
-      aspectRatio: 16 / 9,
+      aspectRatio: 4 / 3,
       backgroundColor: colors.primary,
       position: "relative",
     },
@@ -322,82 +371,69 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       alignItems: "center",
       justifyContent: "center",
     },
-    areaBadge: {
+    areaScrim: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: "70%",
+    },
+    areaTopBadge: {
       position: "absolute",
       top: Spacing.sm,
-      right: Spacing.sm,
       flexDirection: "row",
       alignItems: "center",
       gap: 4,
-      backgroundColor: "rgba(0,0,0,0.65)",
+      backgroundColor: "rgba(0,0,0,0.45)",
       paddingHorizontal: Spacing.sm,
       paddingVertical: 4,
-      borderRadius: BorderRadius.full,
+      borderRadius: BorderRadius.sm,
     },
-    areaBadgeText: {
+    areaTopLeft: { left: Spacing.sm },
+    areaTopRight: { right: Spacing.sm },
+    areaTopBadgeText: {
+      color: "#FFFFFF",
+      fontFamily: Typography.family,
+      fontSize: Typography.caption.fontSize,
+      fontWeight: "700",
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+    },
+    areaCountText: {
       color: "#FFFFFF",
       fontFamily: Typography.family,
       fontSize: Typography.caption.fontSize,
       fontWeight: "700",
     },
-    areaBody: {
-      padding: Spacing.md,
-      gap: Spacing.xs,
-    },
-    areaPhotoOverlay: {
-      position: "absolute",
-      left: 0,
-      right: 0,
-      bottom: 0,
-      height: "60%",
-      backgroundColor: "rgba(0,0,0,0.65)",
-    },
-    areaTypeBadge: {
-      position: "absolute",
-      top: Spacing.sm,
-      left: Spacing.sm,
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      backgroundColor: "rgba(0,0,0,0.65)",
-      paddingHorizontal: Spacing.sm,
-      paddingVertical: 4,
-      borderRadius: BorderRadius.full,
-    },
-    areaTypeBadgeText: {
-      color: "#FFFFFF",
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize,
-      fontWeight: "800",
-      textTransform: "uppercase",
-      letterSpacing: 0.4,
-    },
     areaTitleOverlay: {
       position: "absolute",
-      left: Spacing.md,
-      right: Spacing.md,
+      left: Spacing.lg,
+      right: Spacing.lg,
       bottom: Spacing.md,
       gap: 2,
     },
     areaNameOverlay: {
       color: "#FFFFFF",
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize + 6,
-      fontWeight: "800",
+      fontFamily: Typography.serif,
+      fontSize: 26,
+      fontWeight: "700",
       letterSpacing: -0.4,
-      textShadowColor: "rgba(0,0,0,0.6)",
+      textShadowColor: "rgba(0,0,0,0.5)",
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 4,
     },
     areaZoneOverlay: {
-      color: "#FFFFFF",
+      color: "rgba(255,255,255,0.9)",
       fontFamily: Typography.family,
       fontSize: Typography.body.fontSize - 1,
       fontWeight: "600",
-      opacity: 0.9,
       textShadowColor: "rgba(0,0,0,0.6)",
       textShadowOffset: { width: 0, height: 1 },
       textShadowRadius: 3,
+    },
+    areaBody: {
+      padding: Spacing.md,
+      gap: Spacing.sm,
     },
     areaDescription: {
       color: colors.textSecondary,
@@ -410,40 +446,22 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       flexDirection: "row",
       flexWrap: "wrap",
       gap: Spacing.xs,
-      marginTop: 4,
     },
     areaMetaChip: {
       flexDirection: "row",
       alignItems: "center",
       gap: 4,
-      backgroundColor: isDark ? "#1F3430" : "#E5F3EE",
+      backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
       paddingHorizontal: Spacing.sm,
       paddingVertical: 4,
-      borderRadius: BorderRadius.full,
+      borderRadius: BorderRadius.sm,
     },
     areaMetaText: {
-      color: colors.primary,
+      color: colors.textSecondary,
       fontFamily: Typography.family,
       fontSize: Typography.caption.fontSize,
-      fontWeight: "700",
-    },
-    fab: {
-      position: "absolute",
-      right: Spacing.lg,
-      bottom: 30,
-      width: 60,
-      height: 60,
-      borderRadius: 30,
-      backgroundColor: colors.primary,
-      alignItems: "center",
-      justifyContent: "center",
-      shadowColor: colors.primary,
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.4,
-      shadowRadius: 12,
-      elevation: 10,
-    },
-    fabPressed: {
-      opacity: 0.85,
+      fontWeight: "600",
     },
   });

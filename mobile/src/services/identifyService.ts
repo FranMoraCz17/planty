@@ -94,6 +94,13 @@ function normalizeHumidity(value: string): AreaHumidityLevel {
 }
 
 const REQUEST_TIMEOUT_MS = 75_000;
+// Gemini (vía backend) a veces devuelve 503/502 por sobrecarga momentánea.
+const MAX_AI_RETRIES = 3;
+const RETRY_BASE_DELAY_MS = 2_000;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
@@ -113,42 +120,64 @@ async function wakeBackend(): Promise<void> {
   }
 }
 
+/**
+ * POST con reintentos ante IA saturada (502/503) o backend dormido (timeout).
+ */
+async function postWithRetry(url: string, init: RequestInit): Promise<Response> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < MAX_AI_RETRIES; attempt += 1) {
+    let response: Response;
+    try {
+      response = await fetchWithTimeout(url, init, REQUEST_TIMEOUT_MS);
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        await wakeBackend();
+        lastError = new Error(
+          "No se pudo contactar el servidor. Revisa tu conexión e intenta de nuevo.",
+        );
+        continue;
+      }
+      throw new Error(
+        "No se pudo contactar el servidor. Revisa tu conexión e intenta de nuevo.",
+      );
+    }
+
+    if (
+      (response.status === 502 || response.status === 503) &&
+      attempt < MAX_AI_RETRIES - 1
+    ) {
+      await delay(RETRY_BASE_DELAY_MS * (attempt + 1));
+      continue;
+    }
+
+    return response;
+  }
+
+  throw lastError ??
+    new Error(
+      "El servicio de IA está saturado en este momento. Espera unos segundos e intenta de nuevo.",
+    );
+}
+
 const IdentifyService = {
   async identifyFromUri(photoUri: string): Promise<PlantIdentifyResult> {
     const base64 = await CameraService.readAsBase64(photoUri);
 
-    let response: Response;
-    try {
-      response = await fetchWithTimeout(
-        `${API_BASE_URL}/api/identify-plant`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image_base64: base64, mime_type: "image/jpeg" }),
-        },
-        REQUEST_TIMEOUT_MS,
-      );
-    } catch (err) {
-      // si fue abort por timeout, intentamos despertar el backend y reintentar una vez
-      if (err instanceof Error && err.name === "AbortError") {
-        await wakeBackend();
-        response = await fetchWithTimeout(
-          `${API_BASE_URL}/api/identify-plant`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ image_base64: base64, mime_type: "image/jpeg" }),
-          },
-          REQUEST_TIMEOUT_MS,
-        );
-      } else {
-        throw new Error("No se pudo contactar el servidor. Revisa tu conexión e intenta de nuevo.");
-      }
-    }
+    const response = await postWithRetry(`${API_BASE_URL}/api/identify-plant`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image_base64: base64, mime_type: "image/jpeg" }),
+    });
 
     if (!response.ok) {
       if (response.status === 429) {
         throw new Error("Demasiadas solicitudes. Espera unos segundos e intenta de nuevo.");
+      }
+      if (response.status === 502 || response.status === 503) {
+        throw new Error(
+          "El servicio de IA está saturado en este momento. Espera unos segundos e intenta de nuevo.",
+        );
       }
       const errorBody = await response.text();
       throw new Error(`Error del servidor (${response.status}): ${errorBody}`);

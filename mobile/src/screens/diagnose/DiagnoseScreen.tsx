@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
   ActivityIndicator,
@@ -213,12 +213,7 @@ export default function DiagnoseScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <TopBar title="Diagnostico" subtitle="Analizando" />
-        <View style={styles.centered}>
-          {photoUri ? (
-            <Image source={{ uri: photoUri }} style={styles.previewImage} />
-          ) : null}
-          <ActivityIndicator color={colors.primary} size="large" />
-        </View>
+        <DiagnoseLoading photoUri={photoUri} colors={colors} styles={styles} />
       </SafeAreaView>
     );
   }
@@ -392,11 +387,94 @@ export default function DiagnoseScreen() {
   );
 }
 
+const DIAGNOSE_MESSAGES = [
+  "Procesando la imagen",
+  "Analizando hojas y tallos",
+  "Detectando plagas y deficiencias",
+  "Consultando la IA fitopatológica",
+];
+
+// Loader con mensajes rotativos: da contexto de que el análisis está en curso
+// (importante porque, ante saturación de la IA, puede reintentar unos segundos).
+function DiagnoseLoading({
+  photoUri,
+  colors,
+  styles,
+}: {
+  photoUri: string | null;
+  colors: ThemeColors;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(
+      () => setIdx((i) => (i + 1) % DIAGNOSE_MESSAGES.length),
+      2200,
+    );
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <View style={styles.loadingWrap}>
+      {photoUri ? (
+        <Image source={{ uri: photoUri }} style={styles.loadingPhoto} />
+      ) : null}
+      <View style={styles.loadingStatusRow}>
+        <ActivityIndicator color={colors.primary} />
+        <Text style={styles.loadingTitle}>Analizando con IA</Text>
+      </View>
+      <Text style={styles.loadingMsg}>{DIAGNOSE_MESSAGES[idx]}…</Text>
+      <Text style={styles.loadingHint}>
+        Esto puede tardar unos segundos. No cierres la pantalla.
+      </Text>
+    </View>
+  );
+}
+
 const createStyles = (colors: ThemeColors, isDark: boolean) =>
   StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: colors.surface,
+    },
+    loadingWrap: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      padding: Spacing.xl,
+      gap: Spacing.md,
+    },
+    loadingPhoto: {
+      width: 160,
+      height: 160,
+      borderRadius: BorderRadius.lg,
+      marginBottom: Spacing.sm,
+    },
+    loadingStatusRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+    },
+    loadingTitle: {
+      color: colors.primary,
+      fontFamily: Typography.family,
+      fontSize: Typography.body.fontSize,
+      fontWeight: "800",
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    loadingMsg: {
+      color: colors.text,
+      fontFamily: Typography.serif,
+      fontSize: 20,
+      fontWeight: "700",
+      textAlign: "center",
+    },
+    loadingHint: {
+      color: colors.textSecondary,
+      fontFamily: Typography.family,
+      fontSize: Typography.caption.fontSize + 1,
+      textAlign: "center",
     },
     centered: {
       flex: 1,

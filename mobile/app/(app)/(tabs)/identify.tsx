@@ -4,7 +4,6 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import TopBar from "@/src/components/layout/TopBar";
 import { useHideTabBar } from "@/src/hooks/useHideTabBar";
-import { useTabBarVisibility } from "@/src/components/layout/TabBarVisibilityContext";
 import {
   Alert,
   Image,
@@ -24,6 +23,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useDemoData } from "@/src/data/DemoDataProvider";
+import StorageService from "@/src/services/storageService";
 import { useCamera } from "@/src/hooks/useCamera";
 import IdentifyService, {
   PlantIdentifyResult,
@@ -71,7 +71,7 @@ export default function IdentifyTab() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
   const styles = createStyles(colors, isDark);
-  const { createPlant, areas } = useDemoData();
+  const { createPlant, updatePlant, currentUserId, areas } = useDemoData();
 
   const {
     cameraRef,
@@ -85,7 +85,6 @@ export default function IdentifyTab() {
     toggleFlash,
   } = useCamera({ requestOnMount: true });
 
-  const { show: showTabBar } = useTabBarVisibility();
   const [screenState, setScreenState] = useState<ScreenState>("camera");
   const [result, setResult] = useState<PlantIdentifyResult | null>(null);
   const [lastPhotoUri, setLastPhotoUri] = useState<string | null>(null);
@@ -131,12 +130,14 @@ export default function IdentifyTab() {
       const targetArea = selectedAreaId
         ? areas.find((a) => a.id === selectedAreaId)
         : null;
+      const locationName = targetArea?.name ?? "Sin ubicación";
+      const wateringLabel = result.wateringFrequency || "Cada 7 días";
 
-      await createPlant({
+      const created = await createPlant({
         name: result.commonName,
         scientificName: result.scientificName,
-        locationName: targetArea?.name ?? "Sin ubicación",
-        wateringFrequencyLabel: result.wateringFrequency || "Cada 7 días",
+        locationName,
+        wateringFrequencyLabel: wateringLabel,
         photoUri: lastPhotoUri ?? undefined,
         areaId: selectedAreaId,
         aiAnalyzed: true,
@@ -146,6 +147,26 @@ export default function IdentifyTab() {
         aiWateringDetail: result.wateringDetail || undefined,
         wateringFrequencyDays: parseWateringDays(result.wateringFrequency),
       });
+
+      // Subimos la foto local a Storage para que persista (el file:// de la
+      // cámara es caché temporal y se invalida entre sesiones). Si la subida
+      // falla, la planta queda con la foto local y el fallback de especie cubre.
+      if (lastPhotoUri) {
+        const url = await StorageService.uploadPlantPhoto(
+          currentUserId,
+          created.id,
+          lastPhotoUri,
+        ).catch(() => null);
+        if (url) {
+          await updatePlant(created.id, {
+            name: result.commonName,
+            scientificName: result.scientificName,
+            locationName,
+            wateringFrequencyLabel: wateringLabel,
+            photoUri: url,
+          });
+        }
+      }
       Alert.alert(
         "Planta guardada",
         `${result.commonName} se agregó a tu colección.`,
@@ -619,7 +640,7 @@ export default function IdentifyTab() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Cerrar camara"
-            onPress={() => { showTabBar(); router.replace("/(app)/(tabs)"); }}
+            onPress={() => router.replace("/(app)/(tabs)")}
             style={({ pressed }) => [
               styles.cameraControlBtn,
               pressed && { opacity: 0.7 },

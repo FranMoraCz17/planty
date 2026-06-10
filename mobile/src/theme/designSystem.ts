@@ -36,8 +36,8 @@ export const DarkColors = {
   pressed: "#57A37C",
   onPrimary: "#0A0F0B", // texto oscuro sobre botón verde claro
   textSecondary: "#9DA093",
-  surfaceCard: "#15170F", // panel elevado cálido
-  border: "#262922", // borde sutil cálido
+  surfaceCard: "#1F1D1A", // carbón cálido neutro (taupe), sin tinte verde
+  border: "#302D29", // borde sutil neutro cálido
   accentWarm: "#D8A55A",
   accentCool: "#6FA8B5",
   accentLavender: "#A89BD6",

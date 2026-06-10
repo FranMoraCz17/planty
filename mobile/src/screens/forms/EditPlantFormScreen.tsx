@@ -3,6 +3,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Pressable,
@@ -17,8 +18,6 @@ import { useForm, Controller } from "react-hook-form";
 import * as ImagePicker from "expo-image-picker";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import FormNotice from "@/src/components/forms/FormNotice";
-import FormTextInput from "@/src/components/forms/FormTextInput";
-import ThemedButton from "@/src/components/ui/ThemedButton";
 import { useDemoData } from "@/src/data/DemoDataProvider";
 import {
   type PlantFormValues,
@@ -40,11 +39,11 @@ type NoticeState = {
 };
 
 const FREQUENCY_PRESETS = [
-  { label: "Cada 3 dias", value: "Cada 3 dias" },
-  { label: "Cada 5 dias", value: "Cada 5 dias" },
-  { label: "Cada 7 dias", value: "Cada 7 dias" },
-  { label: "Cada 10 dias", value: "Cada 10 dias" },
-  { label: "Cada 14 dias", value: "Cada 14 dias" },
+  { label: "3 dias", value: "Cada 3 dias" },
+  { label: "5 dias", value: "Cada 5 dias" },
+  { label: "7 dias", value: "Cada 7 dias" },
+  { label: "10 dias", value: "Cada 10 dias" },
+  { label: "14 dias", value: "Cada 14 dias" },
 ];
 
 function formatDate(isoDate: string | null): string {
@@ -70,7 +69,7 @@ async function pickAndCompressImage(
       throw new Error("Necesitamos permiso para acceder a tu galeria.");
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ["images"],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 1,
@@ -109,6 +108,7 @@ export default function EditPlantFormScreen() {
     mode?: string;
     prefillCommon?: string;
     prefillSci?: string;
+    prefillPhoto?: string;
   }>();
   const { colors, isDark } = useAppTheme();
   const {
@@ -171,7 +171,9 @@ export default function EditPlantFormScreen() {
       });
       setAreaId(null);
       setAcquiredAt(new Date().toISOString());
-      setPhotoUri(null);
+      // Foto remota pre-cargada (ej: Wikipedia desde el buscador de especies).
+      // No es local, así que no entra a localPhotoUri (no hay que subirla).
+      setPhotoUri(params.prefillPhoto ?? null);
       setLocalPhotoUri(null);
       return;
     }
@@ -187,7 +189,7 @@ export default function EditPlantFormScreen() {
     setAcquiredAt(plant.acquiredAt ?? null);
     setPhotoUri(plant.photoUri ?? null);
     setLocalPhotoUri(null);
-  }, [isCreateMode, plant, reset, params.prefillCommon, params.prefillSci]);
+  }, [isCreateMode, plant, reset, params.prefillCommon, params.prefillSci, params.prefillPhoto]);
 
   // Cuando se selecciona un area, sincronizamos locationName con su nombre
   useEffect(() => {
@@ -242,7 +244,12 @@ export default function EditPlantFormScreen() {
 
   const onSubmit = async (values: PlantFormValues) => {
     try {
-      let finalPhotoUri: string | undefined = photoUri ?? undefined;
+      // La foto persistente arranca en la que YA estaba guardada (no el file://
+      // de preview): así, si la subida falla, no persistimos una ruta local frágil.
+      let finalPhotoUri: string | undefined = isCreateMode
+        ? undefined
+        : plant?.photoUri ?? undefined;
+      let photoUploadFailed = false;
 
       if (isCreateMode) {
         const created = await createPlant({
@@ -253,11 +260,16 @@ export default function EditPlantFormScreen() {
           areaId,
           acquiredAt,
           notes: values.notes ?? "",
+          // Foto remota del prefill (Wikipedia) si el usuario no eligió una propia.
+          // Ya es una URL pública persistente, no necesita subirse a Storage.
+          photoUri: localPhotoUri ? undefined : photoUri ?? undefined,
         });
-        // Si hay foto local, subimos a Storage usando el ID de la planta creada
+        // Subimos a Storage en la ruta del usuario (users/{uid}/plants/...),
+        // que es la que permiten las reglas de seguridad.
         if (localPhotoUri) {
-          const url = await StorageService.uploadProfilePhoto(
-            `plants-${created.id}`,
+          const url = await StorageService.uploadPlantPhoto(
+            currentUserId,
+            created.id,
             localPhotoUri,
           ).catch(() => null);
           if (url) {
@@ -268,18 +280,24 @@ export default function EditPlantFormScreen() {
               wateringFrequencyLabel: values.wateringFrequencyLabel,
               photoUri: url,
             });
-            finalPhotoUri = url;
+          } else {
+            photoUploadFailed = true;
           }
         }
       } else {
         if (!plant) return;
-        // Si hay foto nueva, subimos antes de actualizar
+        // Si hay foto nueva, intentamos subirla; solo si sube la persistimos.
         if (localPhotoUri) {
-          const url = await StorageService.uploadProfilePhoto(
-            `plants-${plant.id}`,
+          const url = await StorageService.uploadPlantPhoto(
+            currentUserId,
+            plant.id,
             localPhotoUri,
           ).catch(() => null);
-          if (url) finalPhotoUri = url;
+          if (url) {
+            finalPhotoUri = url;
+          } else {
+            photoUploadFailed = true;
+          }
         }
         await updatePlant(plant.id, {
           name: values.name,
@@ -293,15 +311,25 @@ export default function EditPlantFormScreen() {
         });
       }
 
-      setNotice({
-        variant: "success",
-        title: isCreateMode ? "Planta creada" : "Planta actualizada",
-        message: isCreateMode
-          ? "Se guardo correctamente en la coleccion."
-          : "Los cambios quedaron aplicados.",
-      });
-
-      setTimeout(() => router.back(), 600);
+      if (photoUploadFailed) {
+        // Los datos se guardaron, pero avisamos que la foto no subió en vez de
+        // fingir éxito y dejar una imagen rota.
+        setNotice({
+          variant: "warning",
+          title: "Foto no subida",
+          message:
+            "Guardamos los cambios, pero la foto no se pudo subir. Revisa tu conexion e intenta editarla de nuevo.",
+        });
+      } else {
+        setNotice({
+          variant: "success",
+          title: isCreateMode ? "Planta creada" : "Planta actualizada",
+          message: isCreateMode
+            ? "Se guardo correctamente en la coleccion."
+            : "Los cambios quedaron aplicados.",
+        });
+        setTimeout(() => router.back(), 600);
+      }
     } catch (error) {
       setNotice({
         variant: "error",
@@ -335,35 +363,47 @@ export default function EditPlantFormScreen() {
     );
   }
 
+  const acquiredToday =
+    !!acquiredAt &&
+    formatDate(acquiredAt) === formatDate(new Date().toISOString());
+
   return (
     <SafeAreaView style={styles.container}>
+      {/* ── Header estilo iOS: cerrar / titulo / guardar ── */}
+      <View style={styles.header}>
+        <Pressable
+          accessibilityLabel="Cerrar"
+          accessibilityRole="button"
+          onPress={() => router.back()}
+          hitSlop={10}
+          style={({ pressed }) => [styles.headerClose, pressed && { opacity: 0.6 }]}
+        >
+          <MaterialCommunityIcons name="close" size={20} color={colors.text} />
+        </Pressable>
+        <Text style={styles.headerTitle}>
+          {isCreateMode ? "Nueva planta" : "Editar planta"}
+        </Text>
+        <Pressable
+          accessibilityLabel={isCreateMode ? "Crear planta" : "Guardar cambios"}
+          accessibilityRole="button"
+          onPress={handleSubmit(onSubmit, onInvalid)}
+          disabled={formState.isSubmitting}
+          hitSlop={10}
+          style={({ pressed }) => [styles.headerSave, pressed && { opacity: 0.7 }]}
+        >
+          {formState.isSubmitting ? (
+            <ActivityIndicator size="small" color={colors.onPrimary} />
+          ) : (
+            <MaterialCommunityIcons name="check" size={20} color={colors.onPrimary} />
+          )}
+        </Pressable>
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.headerRow}>
-          <Pressable
-            accessibilityLabel="Volver"
-            accessibilityRole="button"
-            onPress={() => router.back()}
-            style={({ pressed }) => [
-              styles.backButton,
-              pressed && styles.backButtonPressed,
-            ]}
-          >
-            <MaterialCommunityIcons
-              name="arrow-left"
-              size={20}
-              color={colors.text}
-            />
-          </Pressable>
-          <Text style={styles.headerTitle}>
-            {isCreateMode ? "Nueva planta" : "Editar planta"}
-          </Text>
-          <View style={{ width: 42 }} />
-        </View>
-
         {notice ? (
           <FormNotice
             message={notice.message}
@@ -378,10 +418,7 @@ export default function EditPlantFormScreen() {
           accessibilityRole="button"
           accessibilityLabel="Agregar foto"
           onPress={handlePickPhoto}
-          style={({ pressed }) => [
-            styles.photoBox,
-            pressed && { opacity: 0.85 },
-          ]}
+          style={({ pressed }) => [styles.photoBox, pressed && { opacity: 0.85 }]}
         >
           {photoUri ? (
             <Image source={{ uri: photoUri }} style={styles.photoImage} />
@@ -389,7 +426,7 @@ export default function EditPlantFormScreen() {
             <View style={styles.photoPlaceholder}>
               <MaterialCommunityIcons
                 name="camera-plus-outline"
-                size={32}
+                size={30}
                 color={colors.textSecondary}
               />
               <Text style={styles.photoPlaceholderText}>Agregar foto</Text>
@@ -397,161 +434,161 @@ export default function EditPlantFormScreen() {
           )}
         </Pressable>
 
-        {/* Identidad */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Identidad</Text>
-          <FormTextInput
-            autoCapitalize="words"
+        {/* ── IDENTIDAD ── */}
+        <Text style={styles.groupLabel}>IDENTIDAD</Text>
+        <View style={styles.group}>
+          <Controller
             control={control}
-            label="Nombre comun"
-            leadingIcon="leaf"
             name="name"
-            placeholder="Monstera"
-          />
-          <FormTextInput
-            autoCapitalize="words"
-            control={control}
-            label="Nombre botanico"
-            leadingIcon="flask-outline"
-            name="scientificName"
-            placeholder="Monstera deliciosa"
-          />
-        </View>
-
-        {/* Area */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Area</Text>
-          <Text style={styles.sectionHint}>
-            Asigna la planta a un espacio para organizarla mejor.
-          </Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chipsRow}
-          >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Sin area"
-              onPress={() => setAreaId(null)}
-              style={({ pressed }) => [
-                styles.chip,
-                areaId === null && styles.chipActive,
-                pressed && { opacity: 0.7 },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  areaId === null && styles.chipTextActive,
-                ]}
-              >
-                Sin area
-              </Text>
-            </Pressable>
-            {areas.map((area) => (
-              <Pressable
-                key={area.id}
-                accessibilityRole="button"
-                accessibilityLabel={`Area ${area.name}`}
-                onPress={() => setAreaId(area.id)}
-                style={({ pressed }) => [
-                  styles.chip,
-                  areaId === area.id && styles.chipActive,
-                  pressed && { opacity: 0.7 },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    areaId === area.id && styles.chipTextActive,
-                  ]}
-                >
-                  {area.name}
-                </Text>
-              </Pressable>
-            ))}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Crear nueva area"
-              onPress={() => router.push("/(app)/forms/area")}
-              style={({ pressed }) => [
-                styles.chipCreate,
-                pressed && { opacity: 0.7 },
-              ]}
-            >
-              <MaterialCommunityIcons
-                name="plus"
-                size={12}
-                color={colors.primary}
-              />
-              <Text style={styles.chipCreateText}>Nueva area</Text>
-            </Pressable>
-          </ScrollView>
-
-          {!areaId ? (
-            <FormTextInput
-              autoCapitalize="words"
-              control={control}
-              label="Ubicacion (texto libre)"
-              leadingIcon="map-marker-outline"
-              name="locationName"
-              placeholder="Sala norte"
-            />
-          ) : null}
-        </View>
-
-        {/* Frecuencia visual */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Frecuencia de riego</Text>
-          <View style={styles.presetGrid}>
-            {FREQUENCY_PRESETS.map((preset) => {
-              const active = watchedFrequency === preset.value;
-              return (
-                <Pressable
-                  key={preset.value}
-                  accessibilityRole="button"
-                  accessibilityLabel={preset.label}
-                  onPress={() =>
-                    setValue("wateringFrequencyLabel", preset.value, {
-                      shouldValidate: true,
-                    })
-                  }
-                  style={({ pressed }) => [
-                    styles.preset,
-                    active && styles.presetActive,
-                    pressed && { opacity: 0.7 },
-                  ]}
-                >
-                  <MaterialCommunityIcons
-                    name="water"
-                    size={14}
-                    color={active ? colors.onPrimary : colors.primary}
+            render={({ field: { onChange, onBlur, value }, fieldState: { error } }) => (
+              <View style={[styles.field, styles.fieldDivider]}>
+                <View style={styles.fieldRow}>
+                  <Text style={styles.fieldKey}>Nombre comun</Text>
+                  <TextInput
+                    value={String(value ?? "")}
+                    onChangeText={onChange}
+                    onBlur={onBlur}
+                    placeholder="Monstera"
+                    placeholderTextColor={colors.disabled}
+                    autoCapitalize="words"
+                    selectionColor={colors.primary}
+                    style={styles.fieldInput}
                   />
-                  <Text
-                    style={[
-                      styles.presetText,
-                      active && styles.presetTextActive,
-                    ]}
-                  >
-                    {preset.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <FormTextInput
-            autoCapitalize="sentences"
+                </View>
+                {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
+              </View>
+            )}
+          />
+          <Controller
             control={control}
-            label="O escribi una frecuencia personalizada"
-            leadingIcon="pencil-outline"
-            name="wateringFrequencyLabel"
-            placeholder="Cada 4 dias en verano"
+            name="scientificName"
+            render={({ field: { onChange, onBlur, value }, fieldState: { error } }) => (
+              <View style={styles.field}>
+                <View style={styles.fieldRow}>
+                  <Text style={styles.fieldKey}>Nombre botanico</Text>
+                  <TextInput
+                    value={String(value ?? "")}
+                    onChangeText={onChange}
+                    onBlur={onBlur}
+                    placeholder="Monstera deliciosa"
+                    placeholderTextColor={colors.disabled}
+                    autoCapitalize="words"
+                    selectionColor={colors.primary}
+                    style={[styles.fieldInput, styles.fieldInputItalic]}
+                  />
+                </View>
+                {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
+              </View>
+            )}
           />
         </View>
 
-        {/* Notas */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Notas</Text>
+        {/* ── UBICACION ── */}
+        <Text style={styles.groupLabel}>UBICACION</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipsRow}
+          keyboardShouldPersistTaps="handled"
+        >
+          <SelectChip
+            label="Sin area"
+            active={areaId === null}
+            onPress={() => setAreaId(null)}
+            colors={colors}
+          />
+          {areas.map((area) => (
+            <SelectChip
+              key={area.id}
+              label={area.name}
+              active={areaId === area.id}
+              onPress={() => setAreaId(area.id)}
+              colors={colors}
+            />
+          ))}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Crear nueva area"
+            onPress={() => router.push("/(app)/forms/area")}
+            style={({ pressed }) => [styles.chipCreate, pressed && { opacity: 0.6 }]}
+          >
+            <MaterialCommunityIcons name="plus" size={13} color={colors.textSecondary} />
+            <Text style={styles.chipCreateText}>Nueva area</Text>
+          </Pressable>
+        </ScrollView>
+
+        {!areaId ? (
+          <View style={styles.group}>
+            <Controller
+              control={control}
+              name="locationName"
+              render={({ field: { onChange, onBlur, value }, fieldState: { error } }) => (
+                <View style={styles.field}>
+                  <View style={styles.fieldRow}>
+                    <Text style={styles.fieldKey}>Ubicacion</Text>
+                    <TextInput
+                      value={String(value ?? "")}
+                      onChangeText={onChange}
+                      onBlur={onBlur}
+                      placeholder="Sala norte"
+                      placeholderTextColor={colors.disabled}
+                      autoCapitalize="words"
+                      selectionColor={colors.primary}
+                      style={styles.fieldInput}
+                    />
+                  </View>
+                  {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
+                </View>
+              )}
+            />
+          </View>
+        ) : null}
+
+        {/* ── RIEGO ── */}
+        <Text style={styles.groupLabel}>RIEGO</Text>
+        <View style={styles.presetRow}>
+          {FREQUENCY_PRESETS.map((preset) => (
+            <SelectChip
+              key={preset.value}
+              label={preset.label}
+              active={watchedFrequency === preset.value}
+              onPress={() =>
+                setValue("wateringFrequencyLabel", preset.value, {
+                  shouldValidate: true,
+                })
+              }
+              colors={colors}
+            />
+          ))}
+        </View>
+        <View style={styles.group}>
+          <Controller
+            control={control}
+            name="wateringFrequencyLabel"
+            render={({ field: { onChange, onBlur, value }, fieldState: { error } }) => (
+              <View style={styles.field}>
+                <View style={styles.fieldRow}>
+                  <Text style={styles.fieldKey}>Personalizada</Text>
+                  <TextInput
+                    value={String(value ?? "")}
+                    onChangeText={onChange}
+                    onBlur={onBlur}
+                    placeholder="Cada 4 dias en verano"
+                    placeholderTextColor={colors.disabled}
+                    autoCapitalize="sentences"
+                    selectionColor={colors.primary}
+                    style={styles.fieldInput}
+                  />
+                </View>
+                {error ? <Text style={styles.fieldError}>{error.message}</Text> : null}
+              </View>
+            )}
+          />
+        </View>
+
+        {/* ── NOTAS ── */}
+        <Text style={styles.groupLabel}>NOTAS</Text>
+        <View style={styles.group}>
           <Controller
             control={control}
             name="notes"
@@ -562,88 +599,138 @@ export default function EditPlantFormScreen() {
                 placeholder="Observaciones, tratamientos, recordatorios..."
                 placeholderTextColor={colors.disabled}
                 multiline
+                selectionColor={colors.primary}
                 style={styles.notesInput}
               />
             )}
           />
         </View>
 
-        {/* Fecha adquisicion */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Fecha de adquisicion</Text>
-          <View style={styles.dateRow}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Marcar adquirida hoy"
-              onPress={() => setAcquiredAt(new Date().toISOString())}
-              style={({ pressed }) => [
-                styles.chip,
-                acquiredAt &&
-                  formatDate(acquiredAt) === formatDate(new Date().toISOString()) &&
-                  styles.chipActive,
-                pressed && { opacity: 0.7 },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  acquiredAt &&
-                    formatDate(acquiredAt) ===
-                      formatDate(new Date().toISOString()) &&
-                    styles.chipTextActive,
-                ]}
-              >
-                Hoy
-              </Text>
-            </Pressable>
-            {acquiredAt ? (
-              <View style={styles.dateBadge}>
-                <MaterialCommunityIcons
-                  name="calendar"
-                  size={14}
-                  color={colors.primary}
-                />
-                <Text style={styles.dateBadgeText}>
-                  {formatDate(acquiredAt)}
-                </Text>
+        {/* ── ADQUISICION ── */}
+        <Text style={styles.groupLabel}>ADQUISICION</Text>
+        <View style={styles.group}>
+          <View style={styles.field}>
+            <View style={styles.fieldRow}>
+              <Text style={styles.fieldKey}>Fecha</Text>
+              <View style={styles.dateValue}>
+                {acquiredAt ? (
+                  <Text style={styles.dateValueText}>{formatDate(acquiredAt)}</Text>
+                ) : (
+                  <Text style={styles.dateValueEmpty}>Sin fecha</Text>
+                )}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Marcar adquirida hoy"
+                  onPress={() => setAcquiredAt(new Date().toISOString())}
+                  hitSlop={6}
+                  style={({ pressed }) => [
+                    styles.dateToday,
+                    acquiredToday && styles.dateTodayActive,
+                    pressed && { opacity: 0.7 },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.dateTodayText,
+                      acquiredToday && styles.dateTodayTextActive,
+                    ]}
+                  >
+                    Hoy
+                  </Text>
+                </Pressable>
+                {acquiredAt ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Quitar fecha"
+                    onPress={() => setAcquiredAt(null)}
+                    hitSlop={8}
+                  >
+                    <MaterialCommunityIcons
+                      name="close-circle"
+                      size={18}
+                      color={colors.disabled}
+                    />
+                  </Pressable>
+                ) : null}
               </View>
-            ) : null}
-            {acquiredAt ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Quitar fecha"
-                onPress={() => setAcquiredAt(null)}
-                hitSlop={8}
-              >
-                <MaterialCommunityIcons
-                  name="close-circle"
-                  size={18}
-                  color={colors.disabled}
-                />
-              </Pressable>
-            ) : null}
+            </View>
           </View>
         </View>
 
-        <ThemedButton
+        {/* Boton grande de respaldo */}
+        <Pressable
+          accessibilityRole="button"
           accessibilityLabel={
-            isCreateMode
-              ? "Guardar nueva planta"
-              : "Guardar cambios de la planta"
-          }
-          label={
-            formState.isSubmitting
-              ? "Guardando..."
-              : isCreateMode
-                ? "Crear planta"
-                : "Guardar cambios"
+            isCreateMode ? "Crear planta" : "Guardar cambios de la planta"
           }
           onPress={handleSubmit(onSubmit, onInvalid)}
-        />
+          disabled={formState.isSubmitting}
+          style={({ pressed }) => [styles.submit, pressed && { opacity: 0.85 }]}
+        >
+          {formState.isSubmitting ? (
+            <ActivityIndicator color={colors.onPrimary} />
+          ) : (
+            <Text style={styles.submitText}>
+              {isCreateMode ? "Crear planta" : "Guardar cambios"}
+            </Text>
+          )}
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+// Chip de seleccion sobrio (cuadrado, sin iconos de color).
+function SelectChip({
+  label,
+  active,
+  onPress,
+  colors,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+  colors: ThemeColors;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => [
+        chipStyles.chip,
+        {
+          borderColor: active ? colors.primary : colors.border,
+          backgroundColor: active ? colors.primary : "transparent",
+        },
+        pressed && { opacity: 0.7 },
+      ]}
+    >
+      <Text
+        style={[
+          chipStyles.text,
+          { color: active ? colors.onPrimary : colors.textSecondary },
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+const chipStyles = StyleSheet.create({
+  chip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 8,
+    borderRadius: BorderRadius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  text: {
+    fontFamily: Typography.family,
+    fontSize: Typography.caption.fontSize + 1,
+    fontWeight: "700",
+  },
+});
 
 const createStyles = (colors: ThemeColors, isDark: boolean) =>
   StyleSheet.create({
@@ -652,9 +739,9 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       backgroundColor: colors.surface,
     },
     content: {
-      padding: Spacing.lg,
-      gap: Spacing.md,
+      paddingHorizontal: Spacing.lg,
       paddingBottom: Spacing.xxl,
+      gap: Spacing.sm,
     },
     emptyState: {
       flex: 1,
@@ -675,39 +762,51 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontSize: Typography.body.fontSize,
       textAlign: "center",
     },
-    headerRow: {
+
+    // ── Header iOS ──
+    header: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
     },
-    backButton: {
-      width: 42,
-      height: 42,
-      borderRadius: 21,
-      backgroundColor: colors.surfaceCard,
-      borderWidth: 1,
-      borderColor: colors.border,
+    headerClose: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
       alignItems: "center",
       justifyContent: "center",
-    },
-    backButtonPressed: {
-      opacity: 0.7,
     },
     headerTitle: {
       color: colors.text,
       fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize + 2,
-      fontWeight: "800",
+      fontSize: Typography.body.fontSize + 1,
+      fontWeight: "700",
     },
+    headerSave: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+
+    // ── Foto ──
     photoBox: {
       width: "100%",
       aspectRatio: 1,
-      maxHeight: 240,
+      maxHeight: 220,
       borderRadius: BorderRadius.lg,
       overflow: "hidden",
       backgroundColor: colors.surfaceCard,
-      borderWidth: 1,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
+      marginTop: Spacing.sm,
     },
     photoImage: {
       width: "100%",
@@ -725,47 +824,69 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontSize: Typography.body.fontSize - 1,
       fontWeight: "600",
     },
-    section: {
-      gap: Spacing.sm,
+
+    // ── Grupos estilo lista iOS ──
+    groupLabel: {
+      ...Typography.overline,
+      color: colors.textSecondary,
+      marginTop: Spacing.md,
+      marginLeft: Spacing.xs,
     },
-    sectionTitle: {
+    group: {
+      backgroundColor: colors.surfaceCard,
+      borderRadius: BorderRadius.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      overflow: "hidden",
+    },
+    field: {
+      paddingHorizontal: Spacing.md,
+      paddingVertical: 10,
+    },
+    fieldDivider: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    fieldRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      minHeight: 32,
+      gap: Spacing.md,
+    },
+    fieldKey: {
+      width: 116,
       color: colors.text,
       fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize + 2,
-      fontWeight: "800",
+      fontSize: Typography.body.fontSize - 1,
+      fontWeight: "600",
     },
-    sectionHint: {
-      color: colors.textSecondary,
+    fieldInput: {
+      flex: 1,
+      color: colors.text,
       fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
+      fontSize: Typography.body.fontSize,
       fontWeight: "500",
-      marginTop: -4,
+      paddingVertical: 2,
     },
+    fieldInputItalic: {
+      fontFamily: Typography.serif,
+      fontStyle: "italic",
+      fontWeight: "400",
+    },
+    fieldError: {
+      color: colors.error,
+      fontFamily: Typography.family,
+      fontSize: Typography.caption.fontSize,
+      fontWeight: "600",
+      marginTop: 4,
+      marginLeft: 116 + Spacing.md,
+    },
+
+    // ── Chips ──
     chipsRow: {
       gap: Spacing.xs,
       paddingVertical: Spacing.xs,
-    },
-    chip: {
-      paddingHorizontal: Spacing.md,
-      paddingVertical: 8,
-      borderRadius: BorderRadius.full,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.surfaceCard,
-    },
-    chipActive: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
-    },
-    chipText: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
-      fontWeight: "700",
-    },
-    chipTextActive: {
-      color: colors.onPrimary,
-      fontWeight: "800",
+      paddingRight: Spacing.md,
     },
     chipCreate: {
       flexDirection: "row",
@@ -773,79 +894,89 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       gap: 4,
       paddingHorizontal: Spacing.md,
       paddingVertical: 8,
-      borderRadius: BorderRadius.full,
-      borderWidth: 1,
-      borderColor: colors.primary,
+      borderRadius: BorderRadius.sm,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
       borderStyle: "dashed",
     },
     chipCreateText: {
-      color: colors.primary,
+      color: colors.textSecondary,
       fontFamily: Typography.family,
       fontSize: Typography.caption.fontSize + 1,
       fontWeight: "700",
     },
-    presetGrid: {
+    presetRow: {
       flexDirection: "row",
       flexWrap: "wrap",
       gap: Spacing.xs,
+      paddingVertical: Spacing.xs,
     },
-    preset: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      paddingHorizontal: Spacing.md,
-      paddingVertical: 8,
-      borderRadius: BorderRadius.full,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.surfaceCard,
-    },
-    presetActive: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
-    },
-    presetText: {
-      color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
-      fontWeight: "700",
-    },
-    presetTextActive: {
-      color: colors.onPrimary,
-      fontWeight: "800",
-    },
+
+    // ── Notas ──
     notesInput: {
-      backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.md,
-      borderWidth: 1,
-      borderColor: colors.border,
+      minHeight: 96,
       paddingHorizontal: Spacing.md,
-      paddingVertical: Spacing.sm,
-      minHeight: 80,
+      paddingVertical: Spacing.md,
       color: colors.text,
       fontFamily: Typography.family,
       fontSize: Typography.body.fontSize,
       textAlignVertical: "top",
     },
-    dateRow: {
+
+    // ── Fecha ──
+    dateValue: {
+      flex: 1,
       flexDirection: "row",
       alignItems: "center",
+      justifyContent: "flex-end",
       gap: Spacing.sm,
-      flexWrap: "wrap",
     },
-    dateBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 6,
-      backgroundColor: isDark ? "#1F3430" : "#E5F3EE",
+    dateValueText: {
+      color: colors.text,
+      fontFamily: Typography.family,
+      fontSize: Typography.body.fontSize - 1,
+      fontWeight: "600",
+    },
+    dateValueEmpty: {
+      color: colors.disabled,
+      fontFamily: Typography.family,
+      fontSize: Typography.body.fontSize - 1,
+      fontWeight: "500",
+    },
+    dateToday: {
       paddingHorizontal: Spacing.md,
-      paddingVertical: 8,
-      borderRadius: BorderRadius.full,
+      paddingVertical: 6,
+      borderRadius: BorderRadius.sm,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
     },
-    dateBadgeText: {
-      color: colors.primary,
+    dateTodayActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    dateTodayText: {
+      color: colors.textSecondary,
       fontFamily: Typography.family,
       fontSize: Typography.caption.fontSize + 1,
+      fontWeight: "700",
+    },
+    dateTodayTextActive: {
+      color: colors.onPrimary,
+    },
+
+    // ── Boton guardar ──
+    submit: {
+      marginTop: Spacing.lg,
+      height: 52,
+      borderRadius: BorderRadius.full,
+      backgroundColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    submitText: {
+      color: colors.onPrimary,
+      fontFamily: Typography.family,
+      fontSize: Typography.body.fontSize,
       fontWeight: "700",
     },
   });

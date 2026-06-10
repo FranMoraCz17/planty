@@ -1,24 +1,24 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   Alert,
-  Dimensions,
   Image,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
+  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import BottomSheet, {
+  BottomSheetScrollView,
+  type BottomSheetBackgroundProps,
+} from "@gorhom/bottom-sheet";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import GlassCard from "@/src/components/ui/GlassCard";
 import GlassChip from "@/src/components/ui/GlassChip";
 import StorageService from "@/src/services/storageService";
 import { usePlantPhoto } from "@/src/hooks/usePlantPhoto";
@@ -82,10 +82,12 @@ export default function PlantDetailScreen() {
   const [analyzing, setAnalyzing] = useState(false);
   const [diagnosing, setDiagnosing] = useState(false);
   const [addingPhoto, setAddingPhoto] = useState(false);
-  const [carouselIndex, setCarouselIndex] = useState(0);
   const [diagnoseHistory, setDiagnoseHistory] = useState<DiagnoseRecord[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
-  const carouselRef = useRef<ScrollView>(null);
+  // Foto activa para diagnóstico (con foto de fondo única, siempre la primera).
+  const carouselIndex = 0;
+  // Posiciones de la hoja arrastrable (abierta a media pantalla / casi completa).
+  const snapPoints = useMemo(() => ["48%", "92%"], []);
 
   useEffect(() => {
     if (!plant) return;
@@ -101,9 +103,6 @@ export default function PlantDetailScreen() {
     userPhotoUri: plant?.photoUri ?? null,
     scientificName: plant?.scientificName ?? null,
   });
-
-  // El héroe va a sangre completa: cada foto ocupa el ancho total de la ventana.
-  const PAGE_WIDTH = Dimensions.get("window").width;
 
   if (!plant) {
     return (
@@ -175,11 +174,6 @@ export default function PlantDetailScreen() {
     } finally {
       setAddingPhoto(false);
     }
-  };
-
-  const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const idx = Math.round(e.nativeEvent.contentOffset.x / PAGE_WIDTH);
-    setCarouselIndex(idx);
   };
 
   const runDiagnose = async (photoUri: string) => {
@@ -286,138 +280,102 @@ export default function PlantDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+      {/* Foto de la planta a pantalla completa de fondo */}
+      {displayPhotos.length > 0 ? (
+        <Image source={{ uri: displayPhotos[0] }} style={styles.bgImage} />
+      ) : (
+        <View style={[styles.bgImage, styles.bgPlaceholder]}>
+          <MaterialCommunityIcons name="leaf" size={84} color={colors.onPrimary} />
+        </View>
+      )}
+      <LinearGradient
+        colors={["rgba(0,0,0,0.4)", "transparent"]}
+        locations={[0, 0.35]}
+        style={styles.bgTopScrim}
+        pointerEvents="none"
+      />
+
+      {/* Botones flotantes de cristal */}
+      <SafeAreaView edges={["top"]} style={styles.heroTopBar} pointerEvents="box-none">
+        <GlassButton
+          icon="chevron-left"
+          accessibilityLabel="Volver"
+          onPress={() => router.back()}
+        />
+        <View style={styles.heroTopRight}>
+          <GlassButton
+            icon={addingPhoto ? undefined : "camera-plus-outline"}
+            loading={addingPhoto}
+            accessibilityLabel="Agregar foto"
+            onPress={() => void handleAddPhoto()}
+          />
+          <GlassButton
+            icon="pencil-outline"
+            accessibilityLabel="Editar planta"
+            onPress={() => router.push(`/(app)/forms/plant?mode=edit&plantId=${plant.id}`)}
+          />
+        </View>
+      </SafeAreaView>
+
+      {/* ── Hoja arrastrable de cristal (estilo Find My) ── */}
+      <BottomSheet
+        snapPoints={snapPoints}
+        index={0}
+        handleIndicatorStyle={styles.sheetHandle}
+        backgroundComponent={(props) => (
+          <SheetGlassBackground {...props} isDark={isDark} />
+        )}
+        enableDynamicSizing={false}
       >
-        {/* ── HERO: foto arriba ── */}
-        <View style={styles.hero}>
-          <ScrollView
-            ref={carouselRef}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={handleScroll}
-          >
-            {displayPhotos.length > 0 ? (
-              displayPhotos.map((uri, i) => (
-                <Image
-                  key={i}
-                  source={{ uri }}
-                  style={[styles.heroImage, { width: PAGE_WIDTH }]}
+        <BottomSheetScrollView
+          contentContainerStyle={styles.sheetContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.sheetHeaderBlock}>
+            {plant.aiAnalyzed && <Text style={styles.aiOverline}>ANALIZADO POR IA</Text>}
+            <Text style={styles.commonName}>{plant.name}</Text>
+            {hasScientific && (
+              <Text style={styles.scientificName}>{plant.scientificName}</Text>
+            )}
+
+            {plant.locationName && plant.locationName !== "Sin ubicación" && (
+              <View style={styles.panelLocation}>
+                <MaterialCommunityIcons
+                  name="map-marker-outline"
+                  size={15}
+                  color={colors.textSecondary}
                 />
-              ))
-            ) : (
-              <View style={[styles.heroPlaceholder, { width: PAGE_WIDTH }]}>
-                <MaterialCommunityIcons name="leaf" size={72} color={colors.onPrimary} />
+                <Text style={styles.panelLocationText}>{plant.locationName}</Text>
               </View>
             )}
-          </ScrollView>
 
-          {/* Scrim superior para los botones */}
-          <LinearGradient
-            colors={["rgba(0,0,0,0.45)", "transparent"]}
-            locations={[0, 0.4]}
-            style={styles.heroTopScrim}
-            pointerEvents="none"
-          />
-
-          {/* Desvanecido inferior: la foto se disuelve en el fondo (truco yate) */}
-          <LinearGradient
-            colors={["transparent", colors.surface]}
-            locations={[0.5, 1]}
-            style={styles.heroBottomFade}
-            pointerEvents="none"
-          />
-
-          {/* Botones flotantes de cristal */}
-          <SafeAreaView edges={["top"]} style={styles.heroTopBar} pointerEvents="box-none">
-            <GlassButton
-              icon="chevron-left"
-              accessibilityLabel="Volver"
-              onPress={() => router.back()}
-            />
-            <View style={styles.heroTopRight}>
-              <GlassButton
-                icon={addingPhoto ? undefined : "camera-plus-outline"}
-                loading={addingPhoto}
-                accessibilityLabel="Agregar foto"
-                onPress={() => void handleAddPhoto()}
-              />
-              <GlassButton
-                icon="pencil-outline"
-                accessibilityLabel="Editar planta"
-                onPress={() => router.push(`/(app)/forms/plant?mode=edit&plantId=${plant.id}`)}
-              />
+            <View style={styles.specsRow}>
+              <GlassChip icon="water-outline" value={wateringValue} />
+              <GlassChip icon="white-balance-sunny" value={plant.aiLight ?? "Sin datos"} />
             </View>
-          </SafeAreaView>
 
-          {/* Contador de fotos discreto */}
-          {displayPhotos.length > 1 && (
-            <View style={styles.photoCounter}>
-              <Text style={styles.photoCounterText}>
-                {carouselIndex + 1} / {displayPhotos.length}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* ── PANEL transparente (cristal) que sube sobre la foto ── */}
-        <View style={styles.panelWrap}>
-          <GlassCard radius={BorderRadius.lg} intensity={55}>
-            <View style={styles.panelInner}>
-              {plant.aiAnalyzed && <Text style={styles.aiOverline}>ANALIZADO POR IA</Text>}
-              <Text style={styles.commonName}>{plant.name}</Text>
-              {hasScientific && (
-                <Text style={styles.scientificName}>{plant.scientificName}</Text>
-              )}
-
-              {plant.locationName && plant.locationName !== "Sin ubicación" && (
-                <View style={styles.panelLocation}>
+            {/* CTA principal */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Diagnosticar salud"
+              onPress={handleDiagnose}
+              disabled={diagnosing}
+              style={({ pressed }) => [styles.cta, pressed && { opacity: 0.85 }]}
+            >
+              {diagnosing ? (
+                <ActivityIndicator color={colors.onPrimary} />
+              ) : (
+                <>
                   <MaterialCommunityIcons
-                    name="map-marker-outline"
-                    size={15}
-                    color={colors.textSecondary}
+                    name="stethoscope"
+                    size={18}
+                    color={colors.onPrimary}
                   />
-                  <Text style={styles.panelLocationText}>{plant.locationName}</Text>
-                </View>
+                  <Text style={styles.ctaText}>Diagnosticar salud</Text>
+                </>
               )}
-
-              <View style={styles.specsRow}>
-                <GlassChip icon="water-outline" value={wateringValue} />
-                <GlassChip icon="white-balance-sunny" value={plant.aiLight ?? "Sin datos"} />
-              </View>
-
-              {plant.aiAnalyzed && plant.aiDescription ? (
-                <Text style={styles.panelDescription} numberOfLines={4}>
-                  {plant.aiDescription}
-                </Text>
-              ) : null}
-
-              {/* CTA principal */}
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Diagnosticar salud"
-                onPress={handleDiagnose}
-                disabled={diagnosing}
-                style={({ pressed }) => [styles.cta, pressed && { opacity: 0.85 }]}
-              >
-                {diagnosing ? (
-                  <ActivityIndicator color={colors.onPrimary} />
-                ) : (
-                  <>
-                    <MaterialCommunityIcons
-                      name="stethoscope"
-                      size={18}
-                      color={colors.onPrimary}
-                    />
-                    <Text style={styles.ctaText}>Diagnosticar salud</Text>
-                  </>
-                )}
-              </Pressable>
-            </View>
-          </GlassCard>
-        </View>
+            </Pressable>
+          </View>
 
         {/* Descripción de IA o botón para analizar */}
         {plant.aiAnalyzed && plant.aiDescription ? (
@@ -536,11 +494,48 @@ export default function PlantDetailScreen() {
           )}
         </View>
 
-        <View style={{ height: Spacing.xxl }} />
-      </ScrollView>
+          <View style={{ height: Spacing.xxl }} />
+        </BottomSheetScrollView>
+      </BottomSheet>
     </View>
   );
 }
+
+// Fondo de cristal esmerilado para la hoja arrastrable.
+function SheetGlassBackground({
+  style,
+  isDark,
+}: BottomSheetBackgroundProps & { isDark: boolean }) {
+  return (
+    <View style={[style, sheetBgStyles.bg]}>
+      <BlurView
+        intensity={Platform.OS === "ios" ? 50 : 90}
+        tint={isDark ? "dark" : "light"}
+        style={StyleSheet.absoluteFill}
+      />
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            backgroundColor: isDark
+              ? "rgba(12,14,11,0.55)"
+              : "rgba(244,241,234,0.6)",
+          },
+        ]}
+      />
+    </View>
+  );
+}
+
+const sheetBgStyles = StyleSheet.create({
+  bg: {
+    overflow: "hidden",
+    // Esquinas superiores redondeadas: la foto "sigue" tras la hoja y da
+    // la sensación de no terminar (efecto yate).
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+});
 
 // Botón circular de cristal para flotar sobre las fotos.
 function GlassButton({
@@ -729,6 +724,27 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       textAlign: "center", marginHorizontal: Spacing.sm,
     },
     content: { paddingHorizontal: Spacing.lg, paddingBottom: 40, gap: Spacing.lg },
+
+    // ── Foto de fondo + hoja arrastrable ──
+    bgImage: {
+      position: "absolute", top: 0, left: 0, right: 0, height: "70%",
+      resizeMode: "cover",
+    },
+    bgPlaceholder: {
+      alignItems: "center", justifyContent: "center",
+      backgroundColor: colors.primary,
+    },
+    bgTopScrim: {
+      position: "absolute", top: 0, left: 0, right: 0, height: 140, zIndex: 1,
+    },
+    sheetHandle: {
+      backgroundColor: isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.25)",
+      width: 40, height: 5,
+    },
+    sheetContent: {
+      paddingHorizontal: Spacing.lg, paddingBottom: 40, gap: Spacing.md,
+    },
+    sheetHeaderBlock: { gap: 4, paddingBottom: Spacing.sm },
 
     // ── HERO a sangre ──
     hero: {

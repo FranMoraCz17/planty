@@ -338,6 +338,7 @@ function HeroTaskCard({
 }) {
   const styles = createStyles(colors, isDark);
   const { photoUri } = usePlantPhoto({
+    userPhotoUri: task.plant.photoUri,
     scientificName: task.plant.scientificName,
   });
 
@@ -432,6 +433,7 @@ function PlantThumbCard({
 }) {
   const styles = createStyles(colors, isDark);
   const { photoUri } = usePlantPhoto({
+    userPhotoUri: plant.photoUri,
     scientificName: plant.scientificName,
   });
 
@@ -579,10 +581,11 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     heroTitle: {
       color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize + 4,
-      fontWeight: "800",
-      lineHeight: Typography.body.lineHeight + 4,
+      fontFamily: Typography.serif,
+      fontSize: Typography.body.fontSize + 6,
+      fontWeight: "700",
+      letterSpacing: -0.3,
+      lineHeight: Typography.body.lineHeight + 6,
     },
     heroSubtitle: {
       color: colors.textSecondary,
@@ -611,9 +614,9 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     sectionTitle: {
       color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize + 4,
-      fontWeight: "800",
+      fontFamily: Typography.serif,
+      fontSize: Typography.body.fontSize + 6,
+      fontWeight: "700",
       letterSpacing: -0.3,
     },
     sectionSubtitle: {
@@ -650,8 +653,6 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     statChipIcon: {
       width: 24,
       height: 24,
-      borderRadius: 12,
-      backgroundColor: isDark ? "#1F3430" : "#E5F3EE",
       alignItems: "center",
       justifyContent: "center",
     },

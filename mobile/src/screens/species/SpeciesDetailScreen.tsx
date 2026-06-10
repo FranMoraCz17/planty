@@ -3,22 +3,20 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   ActivityIndicator,
-  Image,
   Linking,
   Pressable,
-  SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import PlantsCatalogService, {
-  type PlantCatalogCategory,
   type PlantCatalogItem,
 } from "@/src/services/plantsCatalogService";
 import SpeciesInfoService, {
   type SpeciesInfo,
 } from "@/src/services/speciesInfoService";
+import PhotoDetailSheet from "@/src/components/ui/PhotoDetailSheet";
+import GlassChip from "@/src/components/ui/GlassChip";
 import {
   BorderRadius,
   Spacing,
@@ -26,15 +24,6 @@ import {
   type ThemeColors,
 } from "@/src/theme/designSystem";
 import { useAppTheme } from "@/src/theme/ThemeProvider";
-
-const CATEGORY_COLORS: Record<PlantCatalogCategory, string> = {
-  domestica: "#16A34A",
-  agricola: "#B45309",
-  hortaliza: "#65A30D",
-  aromatica: "#0E7490",
-  ornamental: "#A21CAF",
-  arbol: "#4D7C0F",
-};
 
 export default function SpeciesDetailScreen() {
   const router = useRouter();
@@ -51,8 +40,7 @@ export default function SpeciesDetailScreen() {
     const all = PlantsCatalogService.getAll();
     return (
       all.find(
-        (p) =>
-          p.scientificName.toLowerCase() === scientificName.toLowerCase(),
+        (p) => p.scientificName.toLowerCase() === scientificName.toLowerCase(),
       ) ?? null
     );
   }, [scientificName]);
@@ -78,281 +66,165 @@ export default function SpeciesDetailScreen() {
     };
   }, [scientificName]);
 
+  const photoUri = info?.photoUri ?? info?.thumbnailUri ?? null;
+
   const handleAddToCollection = () => {
-    const q = new URLSearchParams({
+    const base: Record<string, string> = {
       mode: "create",
       prefillCommon: commonName,
       prefillSci: scientificName,
-    }).toString();
+    };
+    // Pasamos la foto de Wikipedia para que la planta nazca con imagen.
+    if (photoUri) base.prefillPhoto = photoUri;
+    const q = new URLSearchParams(base).toString();
     router.push(`/(app)/forms/plant?${q}`);
   };
 
-  const photoUri = info?.photoUri ?? info?.thumbnailUri ?? null;
-  const categoryColor = datasetMatch
-    ? CATEGORY_COLORS[datasetMatch.category]
-    : colors.primary;
-
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.headerBar}>
-        <Pressable
-          accessibilityLabel="Volver"
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          hitSlop={12}
-          style={({ pressed }) => [
-            styles.backButton,
-            pressed && { opacity: 0.6 },
-          ]}
-        >
-          <MaterialCommunityIcons
-            name="chevron-left"
-            size={28}
-            color={colors.text}
-          />
-        </Pressable>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          Detalle
+    <PhotoDetailSheet
+      photoUri={photoUri}
+      placeholderIcon="leaf"
+      closeIcon="chevron-left"
+      onClose={() => router.back()}
+    >
+      {datasetMatch ? (
+        <Text style={styles.overline}>
+          {PlantsCatalogService.getCategoryLabel(datasetMatch.category).toUpperCase()}
         </Text>
-        <View style={{ width: 28 }} />
-      </View>
+      ) : null}
+      <Text style={styles.commonName}>{commonName}</Text>
+      {scientificName ? (
+        <Text style={styles.scientificName}>{scientificName}</Text>
+      ) : null}
 
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+      {datasetMatch ? (
+        <View style={styles.chipsRow}>
+          <GlassChip icon="tree-outline" value={datasetMatch.family} />
+        </View>
+      ) : null}
+
+      {/* CTA principal */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Agregar a mi coleccion"
+        onPress={handleAddToCollection}
+        style={({ pressed }) => [styles.cta, pressed && { opacity: 0.85 }]}
       >
-        {/* Foto */}
-        <View style={styles.heroImageWrap}>
-          {photoUri ? (
-            <Image source={{ uri: photoUri }} style={styles.heroImage} />
-          ) : (
-            <View style={styles.heroPlaceholder}>
-              {isLoading ? (
-                <ActivityIndicator color={colors.onPrimary} size="large" />
-              ) : (
-                <MaterialCommunityIcons
-                  name="leaf"
-                  size={64}
-                  color={colors.onPrimary}
-                />
-              )}
-            </View>
-          )}
+        <MaterialCommunityIcons
+          name="bookmark-plus-outline"
+          size={18}
+          color={colors.onPrimary}
+        />
+        <Text style={styles.ctaText}>Agregar a mi coleccion</Text>
+      </Pressable>
+
+      {/* Descripcion Wikipedia */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Acerca de</Text>
+          <Text style={styles.sectionSource}>Wikipedia</Text>
         </View>
-
-        {/* Identidad */}
-        <View style={styles.identityBlock}>
-          <Text style={styles.commonName}>{commonName}</Text>
-          <Text style={styles.scientificName}>{scientificName}</Text>
-
-          <View style={styles.chipsRow}>
-            {datasetMatch ? (
-              <>
-                <View
-                  style={[
-                    styles.categoryChip,
-                    { backgroundColor: categoryColor },
-                  ]}
-                >
-                  <Text style={styles.categoryChipText}>
-                    {PlantsCatalogService.getCategoryLabel(
-                      datasetMatch.category,
-                    )}
-                  </Text>
-                </View>
-                <View style={styles.familyChip}>
-                  <Text style={styles.familyChipText}>
-                    {datasetMatch.family}
-                  </Text>
-                </View>
-              </>
-            ) : null}
+        {isLoading ? (
+          <View style={styles.loadingBlock}>
+            <ActivityIndicator color={colors.primary} />
           </View>
-        </View>
+        ) : info?.extract ? (
+          <Text style={styles.body}>{info.extract}</Text>
+        ) : (
+          <Text style={styles.noInfo}>
+            No encontramos descripcion publica para esta especie. Igual podes
+            agregarla a tu coleccion.
+          </Text>
+        )}
 
-        {/* Descripcion Wikipedia */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Acerca de</Text>
-            <Text style={styles.sectionSource}>Fuente: Wikipedia</Text>
-          </View>
-          {isLoading ? (
-            <View style={styles.loadingBlock}>
-              <ActivityIndicator color={colors.primary} />
-            </View>
-          ) : info?.extract ? (
-            <Text style={styles.extractText}>{info.extract}</Text>
-          ) : (
-            <Text style={styles.noInfoText}>
-              No encontramos descripcion publica para esta especie. Igual podes
-              agregarla a tu coleccion.
-            </Text>
-          )}
-
-          {info?.wikipediaUrl ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Leer mas en Wikipedia"
-              onPress={() => {
-                void Linking.openURL(info.wikipediaUrl as string);
-              }}
-              style={({ pressed }) => [
-                styles.linkRow,
-                pressed && { opacity: 0.6 },
-              ]}
-            >
-              <MaterialCommunityIcons
-                name="open-in-new"
-                size={14}
-                color={colors.primary}
-              />
-              <Text style={styles.linkText}>Leer mas en Wikipedia</Text>
-            </Pressable>
-          ) : null}
-        </View>
-
-        {/* Etiquetas del dataset */}
-        {datasetMatch && datasetMatch.tags.length > 0 ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Caracteristicas</Text>
-            <View style={styles.tagsRow}>
-              {datasetMatch.tags.map((tag) => (
-                <View key={tag} style={styles.tagPill}>
-                  <Text style={styles.tagText}>{tag}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
+        {info?.wikipediaUrl ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Leer mas en Wikipedia"
+            onPress={() => {
+              void Linking.openURL(info.wikipediaUrl as string);
+            }}
+            style={({ pressed }) => [styles.linkRow, pressed && { opacity: 0.6 }]}
+          >
+            <MaterialCommunityIcons
+              name="open-in-new"
+              size={14}
+              color={colors.primary}
+            />
+            <Text style={styles.linkText}>Leer mas en Wikipedia</Text>
+          </Pressable>
         ) : null}
-
-        <View style={{ height: Spacing.xxl }} />
-      </ScrollView>
-
-      {/* CTA flotante */}
-      <View style={styles.ctaWrap}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Agregar a mi coleccion"
-          onPress={handleAddToCollection}
-          style={({ pressed }) => [
-            styles.ctaButton,
-            pressed && { opacity: 0.85 },
-          ]}
-        >
-          <MaterialCommunityIcons
-            name="bookmark-plus-outline"
-            size={20}
-            color={colors.onPrimary}
-          />
-          <Text style={styles.ctaButtonText}>Agregar a mi coleccion</Text>
-        </Pressable>
       </View>
-    </SafeAreaView>
+
+      {/* Etiquetas del dataset */}
+      {datasetMatch && datasetMatch.tags.length > 0 ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Caracteristicas</Text>
+          <View style={styles.tagsRow}>
+            {datasetMatch.tags.map((tag) => (
+              <View key={tag} style={styles.tagPill}>
+                <Text style={styles.tagText}>{tag}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : null}
+    </PhotoDetailSheet>
   );
 }
 
 const createStyles = (colors: ThemeColors, isDark: boolean) =>
   StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.surface,
-    },
-    headerBar: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      paddingHorizontal: Spacing.lg,
-      paddingTop: Spacing.sm,
-      paddingBottom: Spacing.sm,
-    },
-    backButton: {
-      width: 32,
-      height: 32,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    headerTitle: {
-      color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize + 1,
-      fontWeight: "700",
-    },
-    content: {
-      paddingHorizontal: Spacing.lg,
-      paddingBottom: 120,
-      gap: Spacing.lg,
-    },
-    heroImageWrap: {
-      width: "100%",
-      aspectRatio: 16 / 10,
-      borderRadius: BorderRadius.lg,
-      overflow: "hidden",
-      backgroundColor: colors.primary,
-    },
-    heroImage: {
-      width: "100%",
-      height: "100%",
-    },
-    heroPlaceholder: {
-      flex: 1,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    identityBlock: {
-      gap: Spacing.xs,
+    overline: {
+      ...Typography.overline,
+      color: colors.primary,
+      marginBottom: 2,
     },
     commonName: {
       color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize + 12,
-      fontWeight: "800",
+      fontFamily: Typography.serif,
+      fontSize: 32,
+      fontWeight: "700",
       letterSpacing: -0.5,
-      lineHeight: Typography.body.lineHeight + 12,
+      lineHeight: 36,
     },
     scientificName: {
       color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize + 1,
+      fontFamily: Typography.serif,
+      fontSize: 15,
       fontStyle: "italic",
-      fontWeight: "500",
     },
     chipsRow: {
       flexDirection: "row",
+      gap: Spacing.sm,
+      marginTop: Spacing.sm,
       flexWrap: "wrap",
-      gap: Spacing.xs,
-      marginTop: Spacing.xs,
     },
-    categoryChip: {
-      paddingHorizontal: Spacing.sm,
-      paddingVertical: 4,
+    cta: {
+      marginTop: Spacing.md,
+      height: 52,
       borderRadius: BorderRadius.full,
+      backgroundColor: colors.primary,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: Spacing.sm,
     },
-    categoryChipText: {
-      color: "#FFFFFF",
+    ctaText: {
+      color: colors.onPrimary,
       fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize,
-      fontWeight: "800",
-      textTransform: "uppercase",
-      letterSpacing: 0.4,
-    },
-    familyChip: {
-      paddingHorizontal: Spacing.sm,
-      paddingVertical: 4,
-      borderRadius: BorderRadius.full,
-      backgroundColor: colors.surfaceCard,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    familyChipText: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize,
+      fontSize: 16,
       fontWeight: "700",
     },
     section: {
+      backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.6)",
+      borderRadius: BorderRadius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.06)",
+      padding: Spacing.lg,
       gap: Spacing.sm,
     },
-    sectionHeader: {
+    sectionHeaderRow: {
       flexDirection: "row",
       alignItems: "baseline",
       justifyContent: "space-between",
@@ -360,8 +232,8 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     sectionTitle: {
       color: colors.text,
       fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize + 2,
-      fontWeight: "800",
+      fontSize: Typography.body.fontSize + 1,
+      fontWeight: "700",
     },
     sectionSource: {
       color: colors.textSecondary,
@@ -369,19 +241,18 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontSize: Typography.caption.fontSize,
       fontWeight: "600",
     },
-    extractText: {
+    body: {
       color: colors.text,
       fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize,
-      lineHeight: Typography.body.lineHeight + 4,
-      fontWeight: "500",
+      fontSize: Typography.body.fontSize - 1,
+      lineHeight: 22,
     },
-    noInfoText: {
+    noInfo: {
       color: colors.textSecondary,
       fontFamily: Typography.family,
       fontSize: Typography.body.fontSize - 1,
       fontStyle: "italic",
-      lineHeight: Typography.body.lineHeight,
+      lineHeight: 21,
     },
     loadingBlock: {
       paddingVertical: Spacing.lg,
@@ -408,38 +279,12 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       paddingHorizontal: Spacing.sm,
       paddingVertical: 4,
       borderRadius: BorderRadius.full,
-      backgroundColor: isDark ? "#1F3430" : "#E5F3EE",
+      backgroundColor: isDark ? "rgba(111,191,149,0.16)" : "rgba(47,107,79,0.12)",
     },
     tagText: {
       color: colors.primary,
       fontFamily: Typography.family,
       fontSize: Typography.caption.fontSize,
       fontWeight: "700",
-    },
-    ctaWrap: {
-      position: "absolute",
-      left: Spacing.lg,
-      right: Spacing.lg,
-      bottom: Spacing.xl,
-    },
-    ctaButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: Spacing.sm,
-      backgroundColor: colors.primary,
-      borderRadius: BorderRadius.full,
-      paddingVertical: 16,
-      shadowColor: colors.primary,
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.4,
-      shadowRadius: 12,
-      elevation: 10,
-    },
-    ctaButtonText: {
-      color: colors.onPrimary,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize,
-      fontWeight: "800",
     },
   });

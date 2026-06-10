@@ -1,10 +1,9 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-
-type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 import {
   Animated,
   Easing,
+  Image,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -12,9 +11,13 @@ import {
   Text,
   View,
 } from "react-native";
-import { Calendar, LocaleConfig } from "react-native-calendars";
 import { useDemoData } from "@/src/data/DemoDataProvider";
 import TopBar from "@/src/components/layout/TopBar";
+import { usePlantPhoto } from "@/src/hooks/usePlantPhoto";
+import {
+  getDiagnosesByPlant,
+  type DiagnoseRecord,
+} from "@/src/services/diagnoseHistoryService";
 import {
   BorderRadius,
   Spacing,
@@ -23,26 +26,36 @@ import {
 } from "@/src/theme/designSystem";
 import { useAppTheme } from "@/src/theme/ThemeProvider";
 
-LocaleConfig.locales["es"] = {
-  monthNames: ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"],
-  monthNamesShort: ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"],
-  dayNames: ["Domingo","Lunes","Martes","Miercoles","Jueves","Viernes","Sabado"],
-  dayNamesShort: ["Dom","Lun","Mar","Mie","Jue","Vie","Sab"],
-  today: "Hoy",
-};
-LocaleConfig.defaultLocale = "es";
+type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
+type TaskType = "watering" | "diagnose";
 
 interface WateringTask {
   plantId: string;
   plantName: string;
   scientificName: string;
+  plantPhotoUri?: string;
   date: string;
   cycleDays: number;
-  type: "watering" | "diagnose";
+  type: TaskType;
 }
 
 const ISO_TODAY = new Date().toISOString().slice(0, 10);
+const DAYS_AHEAD = 21;
 const RANGE_MONTHS_AHEAD = 3;
+
+// Clasificación por estado de salud (clínica).
+const HEALTH_COLOR: Record<string, string> = {
+  saludable: "#3E8E6A",
+  atencion: "#B07C3A",
+  enferma: "#A63A2E",
+  critica: "#7F1D1D",
+};
+const HEALTH_LABEL: Record<string, string> = {
+  saludable: "Saludable",
+  atencion: "Atención",
+  enferma: "Enferma",
+  critica: "Crítica",
+};
 
 function parseFrequencyDays(label: string | undefined): number | null {
   if (!label) return null;
@@ -60,17 +73,424 @@ function addDays(isoDate: string, days: number): string {
 
 function isoToFriendly(iso: string): string {
   const d = new Date(iso + "T00:00:00");
-  return d.toLocaleDateString("es-CR", { weekday: "long", day: "numeric", month: "long" });
+  return d.toLocaleDateString("es-CR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
 }
 
-function WateringButton({ onToggle, done, type }: { onToggle: () => void; done: boolean; type: "watering" | "diagnose" }) {
+export default function CalendarScreen() {
+  const { colors, isDark } = useAppTheme();
+  const { plants } = useDemoData();
+  const styles = createStyles(colors, isDark);
+  const [selectedDate, setSelectedDate] = useState<string>(ISO_TODAY);
+  const [done, setDone] = useState<Set<string>>(new Set());
+  const [history, setHistory] = useState<DiagnoseRecord[]>([]);
+
+  // Cargar diagnósticos ya hechos (clínica) para mostrarlos en su día.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const all: DiagnoseRecord[] = [];
+      for (const plant of plants) {
+        const recs = await getDiagnosesByPlant(plant.id).catch(() => []);
+        all.push(...recs);
+      }
+      if (!cancelled) setHistory(all);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [plants]);
+
+  const days = useMemo(() => {
+    const arr: string[] = [];
+    for (let i = 0; i < DAYS_AHEAD; i += 1) arr.push(addDays(ISO_TODAY, i));
+    return arr;
+  }, []);
+
+  const allTasks = useMemo<WateringTask[]>(() => {
+    const tasks: WateringTask[] = [];
+    const horizon = new Date();
+    horizon.setMonth(horizon.getMonth() + RANGE_MONTHS_AHEAD);
+    const horizonIso = horizon.toISOString().slice(0, 10);
+
+    plants.forEach((plant) => {
+      const cycle = parseFrequencyDays(plant.wateringFrequencyLabel);
+      if (cycle) {
+        let current = ISO_TODAY;
+        while (current <= horizonIso) {
+          tasks.push({
+            plantId: plant.id,
+            plantName: plant.name,
+            scientificName: plant.scientificName,
+            plantPhotoUri: plant.photoUri,
+            date: current,
+            cycleDays: cycle,
+            type: "watering",
+          });
+          current = addDays(current, cycle);
+        }
+      }
+      if (!plant.aiAnalyzed) {
+        tasks.push({
+          plantId: plant.id,
+          plantName: plant.name,
+          scientificName: plant.scientificName,
+          plantPhotoUri: plant.photoUri,
+          date: ISO_TODAY,
+          cycleDays: 30,
+          type: "diagnose",
+        });
+      }
+    });
+
+    return tasks;
+  }, [plants]);
+
+  // Qué días tienen actividad (para los puntos de la tira).
+  const daysWithTasks = useMemo(() => {
+    const set = new Set<string>();
+    allTasks.forEach((t) => set.add(t.date));
+    return set;
+  }, [allTasks]);
+
+  const daysWithHistory = useMemo(() => {
+    const set = new Set<string>();
+    history.forEach((h) => set.add(h.createdAt.slice(0, 10)));
+    return set;
+  }, [history]);
+
+  const tasksForDay = useMemo(
+    () => allTasks.filter((t) => t.date === selectedDate),
+    [allTasks, selectedDate],
+  );
+
+  const historyForDay = useMemo(
+    () =>
+      history
+        .filter((h) => h.createdAt.slice(0, 10) === selectedDate)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [history, selectedDate],
+  );
+
+  const doneCount = tasksForDay.filter((t) =>
+    done.has(`${t.plantId}-${t.date}-${t.type}`),
+  ).length;
+
+  const markDone = useCallback((key: string) => {
+    setDone((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <TopBar title="Calendario" subtitle="Tu semana de cuidados" />
+
+      {/* Tira de días deslizable */}
+      <View style={styles.stripWrap}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.strip}
+        >
+          {days.map((iso) => (
+            <DayChip
+              key={iso}
+              iso={iso}
+              selected={iso === selectedDate}
+              hasTasks={daysWithTasks.has(iso)}
+              hasHistory={daysWithHistory.has(iso)}
+              onPress={() => setSelectedDate(iso)}
+              colors={colors}
+              isDark={isDark}
+            />
+          ))}
+        </ScrollView>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Encabezado del día */}
+        <View style={styles.dayHeader}>
+          <Text style={styles.dayHeaderTitle} numberOfLines={1}>
+            {isoToFriendly(selectedDate)}
+          </Text>
+          {tasksForDay.length > 0 ? (
+            <View style={styles.dayBadge}>
+              <Text style={styles.dayBadgeText}>
+                {doneCount}/{tasksForDay.length}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* Tareas pendientes del día */}
+        {tasksForDay.length > 0 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>TAREAS</Text>
+            {tasksForDay.map((task) => {
+              const key = `${task.plantId}-${task.date}-${task.type}`;
+              return (
+                <TaskCard
+                  key={key}
+                  task={task}
+                  done={done.has(key)}
+                  onToggle={() => markDone(key)}
+                  colors={colors}
+                  isDark={isDark}
+                />
+              );
+            })}
+          </View>
+        ) : null}
+
+        {/* Diagnósticos hechos ese día (clínica) */}
+        {historyForDay.length > 0 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>DIAGNÓSTICOS REALIZADOS</Text>
+            {historyForDay.map((record) => (
+              <DiagnoseHistoryCard
+                key={record.id}
+                record={record}
+                colors={colors}
+                isDark={isDark}
+              />
+            ))}
+          </View>
+        ) : null}
+
+        {tasksForDay.length === 0 && historyForDay.length === 0 ? (
+          <View style={styles.emptyDay}>
+            <MaterialCommunityIcons
+              name="calendar-check-outline"
+              size={36}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.emptyText}>Sin actividad este día.</Text>
+            <Text style={styles.emptySubtext}>Disfruta el descanso.</Text>
+          </View>
+        ) : null}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+// ── Chip de día en la tira ──
+function DayChip({
+  iso,
+  selected,
+  hasTasks,
+  hasHistory,
+  onPress,
+  colors,
+  isDark,
+}: {
+  iso: string;
+  selected: boolean;
+  hasTasks: boolean;
+  hasHistory: boolean;
+  onPress: () => void;
+  colors: ThemeColors;
+  isDark: boolean;
+}) {
+  const d = new Date(iso + "T00:00:00");
+  const weekday = d.toLocaleDateString("es-CR", { weekday: "short" }).replace(".", "");
+  const dayNum = d.getDate();
+  const isToday = iso === ISO_TODAY;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={isoToFriendly(iso)}
+      onPress={onPress}
+      style={[
+        chipStyles.chip,
+        {
+          backgroundColor: selected
+            ? colors.primary
+            : isDark
+              ? "rgba(255,255,255,0.05)"
+              : "rgba(255,255,255,0.6)",
+          borderColor: selected ? colors.primary : colors.border,
+        },
+      ]}
+    >
+      <Text
+        style={[
+          chipStyles.weekday,
+          { color: selected ? colors.onPrimary : colors.textSecondary },
+        ]}
+      >
+        {weekday}
+      </Text>
+      <Text
+        style={[
+          chipStyles.dayNum,
+          { color: selected ? colors.onPrimary : colors.text },
+        ]}
+      >
+        {dayNum}
+      </Text>
+      {isToday ? (
+        <View
+          style={[
+            chipStyles.todayDot,
+            { backgroundColor: selected ? colors.onPrimary : colors.primary },
+          ]}
+        />
+      ) : (
+        <View style={chipStyles.dotsRow}>
+          {hasTasks ? (
+            <View
+              style={[
+                chipStyles.dot,
+                { backgroundColor: selected ? colors.onPrimary : colors.accentCool },
+              ]}
+            />
+          ) : null}
+          {hasHistory ? (
+            <View
+              style={[
+                chipStyles.dot,
+                { backgroundColor: selected ? colors.onPrimary : colors.accentWarm },
+              ]}
+            />
+          ) : null}
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+const chipStyles = StyleSheet.create({
+  chip: {
+    width: 52,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: "center",
+    gap: 3,
+  },
+  weekday: {
+    fontFamily: Typography.family,
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "capitalize",
+  },
+  dayNum: {
+    fontFamily: Typography.serif,
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  todayDot: { width: 5, height: 5, borderRadius: 2.5 },
+  dotsRow: { flexDirection: "row", gap: 3, height: 5, alignItems: "center" },
+  dot: { width: 5, height: 5, borderRadius: 2.5 },
+});
+
+// ── Tarea con foto de la planta ──
+function TaskCard({
+  task,
+  done,
+  onToggle,
+  colors,
+  isDark,
+}: {
+  task: WateringTask;
+  done: boolean;
+  onToggle: () => void;
+  colors: ThemeColors;
+  isDark: boolean;
+}) {
+  const styles = createStyles(colors, isDark);
+  const { photoUri } = usePlantPhoto({
+    userPhotoUri: task.plantPhotoUri,
+    scientificName: task.scientificName,
+  });
+  const isWatering = task.type === "watering";
+
+  return (
+    <View style={[styles.taskCard, done && { opacity: 0.55 }]}>
+      <View style={styles.taskThumbWrap}>
+        {photoUri ? (
+          <Image source={{ uri: photoUri }} style={styles.taskThumb} />
+        ) : (
+          <View style={[styles.taskThumb, styles.taskThumbPlaceholder]}>
+            <MaterialCommunityIcons name="leaf" size={20} color={colors.onPrimary} />
+          </View>
+        )}
+      </View>
+      <View style={styles.taskBody}>
+        <Text style={[styles.taskTitle, done && styles.taskTitleDone]} numberOfLines={1}>
+          {isWatering ? `Regar ${task.plantName}` : `Diagnosticar ${task.plantName}`}
+        </Text>
+        <Text style={styles.taskSubtitle} numberOfLines={1}>
+          {isWatering ? `Cada ${task.cycleDays} días` : "Sin análisis de IA aún"}
+        </Text>
+      </View>
+      <WateringButton done={done} onToggle={onToggle} type={task.type} />
+    </View>
+  );
+}
+
+// ── Diagnóstico hecho (clínica) ──
+function DiagnoseHistoryCard({
+  record,
+  colors,
+  isDark,
+}: {
+  record: DiagnoseRecord;
+  colors: ThemeColors;
+  isDark: boolean;
+}) {
+  const styles = createStyles(colors, isDark);
+  const color = HEALTH_COLOR[record.healthStatus] ?? colors.textSecondary;
+  const label = HEALTH_LABEL[record.healthStatus] ?? record.healthStatus;
+
+  return (
+    <View style={styles.diagCard}>
+      <View style={[styles.diagStatusBar, { backgroundColor: color }]} />
+      <View style={styles.taskBody}>
+        <View style={styles.diagHeaderRow}>
+          <Text style={styles.taskTitle} numberOfLines={1}>
+            {record.plantName}
+          </Text>
+          <View style={[styles.diagBadge, { backgroundColor: color + "22" }]}>
+            <Text style={[styles.diagBadgeText, { color }]}>{label}</Text>
+          </View>
+        </View>
+        <Text style={styles.taskSubtitle} numberOfLines={2}>
+          {record.healthSummary}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// ── Botón de marcar tarea (con animación de gota) ──
+function WateringButton({
+  onToggle,
+  done,
+  type,
+}: {
+  onToggle: () => void;
+  done: boolean;
+  type: TaskType;
+}) {
   const { colors } = useAppTheme();
   const scale = useRef(new Animated.Value(1)).current;
   const dropOpacity = useRef(new Animated.Value(0)).current;
   const dropY = useRef(new Animated.Value(0)).current;
 
-  const pendingLabel = type === "watering" ? "Regar" : "Hacer";
-  const doneLabel = "Hecha";
+  const tone = colors.primary;
+  const pendingLabel = type === "watering" ? "Regar" : "Revisar";
   const pendingIcon: IconName = type === "watering" ? "water-outline" : "stethoscope";
 
   const handlePress = useCallback(() => {
@@ -79,7 +499,6 @@ function WateringButton({ onToggle, done, type }: { onToggle: () => void; done: 
       Animated.timing(scale, { toValue: 1.15, duration: 120, useNativeDriver: true, easing: Easing.out(Easing.back(3)) }),
       Animated.timing(scale, { toValue: 1, duration: 150, useNativeDriver: true, easing: Easing.out(Easing.cubic) }),
     ]).start();
-    // Gota solo al marcar riegos (no al desmarcar, no en diagnóstico)
     if (!done && type === "watering") {
       dropOpacity.setValue(1);
       dropY.setValue(0);
@@ -100,33 +519,24 @@ function WateringButton({ onToggle, done, type }: { onToggle: () => void; done: 
           onPress={handlePress}
           style={[
             waterBtnStyles.btn,
-            {
-              backgroundColor: done
-                ? (type === "watering" ? colors.accentCool : colors.accentWarm)
-                : "transparent",
-              borderColor: done
-                ? (type === "watering" ? colors.accentCool : colors.accentWarm)
-                : (type === "watering" ? colors.accentCool : colors.accentWarm),
-            },
+            done
+              ? { backgroundColor: tone, borderColor: tone }
+              : { backgroundColor: "transparent", borderColor: colors.border },
           ]}
         >
           <MaterialCommunityIcons
             name={done ? "check" : pendingIcon}
-            size={16}
-            color={done ? "#fff" : (type === "watering" ? colors.accentCool : colors.accentWarm)}
+            size={15}
+            color={done ? colors.onPrimary : tone}
           />
-          <Text style={[waterBtnStyles.label, { color: done ? "#fff" : (type === "watering" ? colors.accentCool : colors.accentWarm) }]}>
-            {done ? doneLabel : pendingLabel}
+          <Text style={[waterBtnStyles.label, { color: done ? colors.onPrimary : tone }]}>
+            {done ? "Hecha" : pendingLabel}
           </Text>
         </Pressable>
       </Animated.View>
-      {/* Gota animada */}
       <Animated.View
         pointerEvents="none"
-        style={[
-          waterBtnStyles.drop,
-          { opacity: dropOpacity, transform: [{ translateY: dropY }] },
-        ]}
+        style={[waterBtnStyles.drop, { opacity: dropOpacity, transform: [{ translateY: dropY }] }]}
       >
         <MaterialCommunityIcons name="water" size={14} color={colors.accentCool} />
       </Animated.View>
@@ -139,275 +549,44 @@ const waterBtnStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: BorderRadius.full,
-    borderWidth: 1.5,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  label: {
-    fontFamily: Typography.family,
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  drop: {
-    position: "absolute",
-    bottom: -8,
-    left: "50%",
-  },
+  label: { fontFamily: Typography.family, fontSize: 12, fontWeight: "700" },
+  drop: { position: "absolute", bottom: -8, left: "50%" },
 });
-
-export default function CalendarScreen() {
-  const { colors, isDark } = useAppTheme();
-  const { plants } = useDemoData();
-  const styles = createStyles(colors, isDark);
-  const [selectedDate, setSelectedDate] = useState<string>(ISO_TODAY);
-  // Set de tareas marcadas como completadas en esta sesión
-  const [done, setDone] = useState<Set<string>>(new Set());
-
-  const allTasks = useMemo<WateringTask[]>(() => {
-    const tasks: WateringTask[] = [];
-    const horizon = new Date();
-    horizon.setMonth(horizon.getMonth() + RANGE_MONTHS_AHEAD);
-    const horizonIso = horizon.toISOString().slice(0, 10);
-
-    plants.forEach((plant) => {
-      const cycle = parseFrequencyDays(plant.wateringFrequencyLabel);
-      if (!cycle) return;
-      let current = ISO_TODAY;
-      while (current <= horizonIso) {
-        tasks.push({ plantId: plant.id, plantName: plant.name, scientificName: plant.scientificName, date: current, cycleDays: cycle, type: "watering" });
-        current = addDays(current, cycle);
-      }
-      // Tarea de diagnóstico: cada 30 días si no tiene análisis reciente
-      if (!plant.aiAnalyzed) {
-        tasks.push({ plantId: plant.id, plantName: plant.name, scientificName: plant.scientificName, date: ISO_TODAY, cycleDays: 30, type: "diagnose" });
-      }
-    });
-
-    return tasks;
-  }, [plants]);
-
-  const markedDates = useMemo(() => {
-    const marks: Record<string, { marked?: boolean; dots?: { color: string }[]; selected?: boolean; selectedColor?: string }> = {};
-    // Acumular qué tipos de tarea tiene cada día (sin repetir dots por tarea)
-    const dayTypes: Record<string, Set<"watering" | "diagnose">> = {};
-
-    allTasks.forEach((task) => {
-      if (!dayTypes[task.date]) dayTypes[task.date] = new Set();
-      dayTypes[task.date].add(task.type);
-    });
-
-    Object.entries(dayTypes).forEach(([date, types]) => {
-      const dots: { color: string }[] = [];
-      if (types.has("watering")) dots.push({ color: colors.accentCool });
-      if (types.has("diagnose")) dots.push({ color: colors.accentWarm });
-      marks[date] = { marked: true, dots };
-    });
-
-    marks[selectedDate] = {
-      ...(marks[selectedDate] ?? {}),
-      selected: true,
-      selectedColor: colors.primary,
-    };
-
-    return marks;
-  }, [allTasks, selectedDate, colors]);
-
-  const tasksForDay = useMemo(
-    () => allTasks.filter((t) => t.date === selectedDate),
-    [allTasks, selectedDate],
-  );
-
-  const wateringCount = tasksForDay.filter((t) => t.type === "watering").length;
-  const diagnoseCount = tasksForDay.filter((t) => t.type === "diagnose").length;
-  const doneCount = tasksForDay.filter((t) => done.has(`${t.plantId}-${t.date}-${t.type}`)).length;
-
-  const markDone = useCallback((key: string) => {
-    setDone((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
-      return next;
-    });
-  }, []);
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <TopBar title="Calendario" subtitle="Riegos y tareas" />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-
-        <View style={styles.calendarCard}>
-          <Calendar
-            current={ISO_TODAY}
-            onDayPress={(day) => setSelectedDate(day.dateString)}
-            markedDates={markedDates}
-            markingType="multi-dot"
-            firstDay={1}
-            enableSwipeMonths
-            theme={{
-              backgroundColor: "transparent",
-              calendarBackground: "transparent",
-              textSectionTitleColor: colors.textSecondary,
-              selectedDayBackgroundColor: colors.primary,
-              selectedDayTextColor: colors.onPrimary,
-              todayTextColor: colors.primary,
-              dayTextColor: colors.text,
-              textDisabledColor: colors.disabled,
-              dotColor: colors.primary,
-              selectedDotColor: colors.onPrimary,
-              arrowColor: colors.primary,
-              monthTextColor: colors.text,
-              textMonthFontWeight: "700",
-              textDayFontWeight: "500",
-              textDayHeaderFontWeight: "600",
-              textMonthFontSize: 18,
-              textDayFontSize: 14,
-              textDayHeaderFontSize: 12,
-            }}
-          />
-        </View>
-
-        {/* Encabezado del día */}
-        <View style={styles.dayHeader}>
-          <Text style={styles.dayHeaderTitle} numberOfLines={1}>
-            {isoToFriendly(selectedDate)}
-          </Text>
-          {tasksForDay.length > 0 && (
-            <View style={styles.dayBadge}>
-              <Text style={styles.dayBadgeText}>
-                {doneCount}/{tasksForDay.length}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Leyenda de puntos */}
-        {tasksForDay.length > 0 && (
-          <View style={styles.legendRow}>
-            {wateringCount > 0 && (
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: colors.accentCool }]} />
-                <Text style={styles.legendText}>{wateringCount} riego{wateringCount > 1 ? "s" : ""}</Text>
-              </View>
-            )}
-            {diagnoseCount > 0 && (
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: colors.accentWarm }]} />
-                <Text style={styles.legendText}>{diagnoseCount} diagnóstico{diagnoseCount > 1 ? "s" : ""} sugerido{diagnoseCount > 1 ? "s" : ""}</Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        {tasksForDay.length === 0 ? (
-          <View style={styles.emptyDay}>
-            <MaterialCommunityIcons name="calendar-check-outline" size={36} color={colors.textSecondary} />
-            <Text style={styles.emptyText}>Sin tareas para este día.</Text>
-            <Text style={styles.emptySubtext}>Disfruta el descanso 🌿</Text>
-          </View>
-        ) : (
-          tasksForDay.map((task) => {
-            const key = `${task.plantId}-${task.date}-${task.type}`;
-            const isDone = done.has(key);
-            const isWatering = task.type === "watering";
-            return (
-              <View key={key} style={[
-                styles.taskCard,
-                isDone && { opacity: 0.6, borderColor: (isWatering ? colors.accentCool : colors.accentWarm) + "44" },
-              ]}>
-                <View style={[
-                  styles.taskIcon,
-                  { backgroundColor: isWatering ? colors.accentCool + "33" : colors.accentWarm + "33" },
-                ]}>
-                  <MaterialCommunityIcons
-                    name={isWatering ? "water" : "stethoscope"}
-                    size={20}
-                    color={isWatering ? colors.accentCool : colors.accentWarm}
-                  />
-                </View>
-                <View style={styles.taskBody}>
-                  <Text style={[styles.taskTitle, isDone && styles.taskTitleDone]} numberOfLines={1}>
-                    {isWatering ? `Regar ${task.plantName}` : `Diagnosticar ${task.plantName}`}
-                  </Text>
-                  <Text style={styles.taskSubtitle} numberOfLines={1}>
-                    {task.scientificName
-                      ? task.scientificName
-                      : isWatering
-                        ? `Cada ${task.cycleDays} días`
-                        : "Sin análisis de IA aún"}
-                  </Text>
-                  {isWatering && (
-                    <Text style={styles.taskCycle}>Ciclo: cada {task.cycleDays} días</Text>
-                  )}
-                </View>
-                <WateringButton
-                  done={isDone}
-                  onToggle={() => markDone(key)}
-                  type={task.type}
-                />
-              </View>
-            );
-          })
-        )}
-
-        {/* Resumen del mes */}
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Este mes</Text>
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryItem}>
-              <MaterialCommunityIcons name="water-outline" size={18} color={colors.accentCool} />
-              <Text style={styles.summaryValue}>
-                {allTasks.filter((t) => t.type === "watering" && t.date.startsWith(ISO_TODAY.slice(0, 7))).length}
-              </Text>
-              <Text style={styles.summaryLabel}>riegos</Text>
-            </View>
-            <View style={styles.summaryDivider} />
-            <View style={styles.summaryItem}>
-              <MaterialCommunityIcons name="leaf" size={18} color={colors.primary} />
-              <Text style={styles.summaryValue}>{plants.length}</Text>
-              <Text style={styles.summaryLabel}>plantas</Text>
-            </View>
-            <View style={styles.summaryDivider} />
-            <View style={styles.summaryItem}>
-              <MaterialCommunityIcons name="check-circle-outline" size={18} color={colors.primary} />
-              <Text style={styles.summaryValue}>{done.size}</Text>
-              <Text style={styles.summaryLabel}>completadas</Text>
-            </View>
-          </View>
-        </View>
-
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
 
 const createStyles = (colors: ThemeColors, isDark: boolean) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.surface },
-    content: { paddingHorizontal: Spacing.lg, paddingBottom: 120, gap: Spacing.md },
-    calendarCard: {
-      backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      paddingVertical: Spacing.sm,
-      paddingHorizontal: Spacing.xs,
-      overflow: "hidden",
+    stripWrap: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      paddingBottom: Spacing.sm,
+    },
+    strip: {
+      paddingHorizontal: Spacing.lg,
+      gap: Spacing.xs,
+    },
+    content: {
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.md,
+      paddingBottom: 120,
+      gap: Spacing.md,
     },
     dayHeader: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      marginTop: Spacing.sm,
     },
     dayHeaderTitle: {
       color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize + 2,
-      fontWeight: "800",
+      fontFamily: Typography.serif,
+      fontSize: 22,
+      fontWeight: "700",
+      letterSpacing: -0.3,
       textTransform: "capitalize",
       flex: 1,
     },
@@ -423,24 +602,10 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontSize: 12,
       fontWeight: "800",
     },
-    legendRow: {
-      flexDirection: "row",
-      gap: Spacing.md,
-      marginTop: -Spacing.xs,
-    },
-    legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
-    legendDot: { width: 8, height: 8, borderRadius: 4 },
-    legendText: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: 12,
-      fontWeight: "600",
-    },
-    emptyDay: {
-      alignItems: "center",
-      paddingVertical: Spacing.xl,
-      gap: Spacing.sm,
-    },
+    section: { gap: Spacing.md },
+    sectionLabel: { ...Typography.overline, color: colors.textSecondary, marginBottom: 2 },
+
+    emptyDay: { alignItems: "center", paddingVertical: Spacing.xxl, gap: Spacing.sm },
     emptyText: {
       color: colors.textSecondary,
       fontFamily: Typography.family,
@@ -452,22 +617,34 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontFamily: Typography.family,
       fontSize: Typography.caption.fontSize + 1,
     },
+
+    // Tarea
     taskCard: {
       flexDirection: "row",
       alignItems: "center",
       gap: Spacing.md,
-      backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
+      backgroundColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.85)",
+      borderRadius: BorderRadius.xl,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.05)",
       padding: Spacing.md,
+      shadowColor: "#000",
+      shadowOpacity: isDark ? 0.3 : 0.07,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 2,
     },
-    taskIcon: {
-      width: 42,
-      height: 42,
-      borderRadius: BorderRadius.full,
+    taskThumbWrap: {
+      width: 48,
+      height: 48,
+      borderRadius: BorderRadius.md,
+      overflow: "hidden",
+    },
+    taskThumb: { width: "100%", height: "100%", resizeMode: "cover" },
+    taskThumbPlaceholder: {
       alignItems: "center",
       justifyContent: "center",
+      backgroundColor: colors.primary,
     },
     taskBody: { flex: 1, gap: 2 },
     taskTitle: {
@@ -485,56 +662,38 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontFamily: Typography.family,
       fontSize: Typography.caption.fontSize + 1,
       fontWeight: "500",
-      fontStyle: "italic",
     },
-    taskCycle: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize,
-      fontWeight: "600",
-      marginTop: 2,
-    },
-    summaryCard: {
-      backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
+
+    // Diagnóstico hecho
+    diagCard: {
+      flexDirection: "row",
+      gap: Spacing.md,
+      backgroundColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.85)",
+      borderRadius: BorderRadius.xl,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.05)",
       padding: Spacing.md,
-      gap: Spacing.sm,
-      marginTop: Spacing.sm,
+      shadowColor: "#000",
+      shadowOpacity: isDark ? 0.3 : 0.07,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 2,
     },
-    summaryTitle: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: 11,
-      fontWeight: "700",
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-    },
-    summaryRow: {
+    diagStatusBar: { width: 4, borderRadius: 2, alignSelf: "stretch" },
+    diagHeaderRow: {
       flexDirection: "row",
       alignItems: "center",
+      justifyContent: "space-between",
+      gap: Spacing.sm,
     },
-    summaryItem: {
-      flex: 1,
-      alignItems: "center",
-      gap: 3,
+    diagBadge: {
+      paddingHorizontal: Spacing.sm,
+      paddingVertical: 2,
+      borderRadius: BorderRadius.full,
     },
-    summaryDivider: {
-      width: 1,
-      height: 36,
-      backgroundColor: colors.border,
-    },
-    summaryValue: {
-      color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: 20,
-      fontWeight: "800",
-    },
-    summaryLabel: {
-      color: colors.textSecondary,
+    diagBadgeText: {
       fontFamily: Typography.family,
       fontSize: 11,
-      fontWeight: "600",
+      fontWeight: "800",
     },
   });

@@ -14,6 +14,8 @@ import {
   View,
 } from "react-native";
 import { auth } from "@/src/firebase/firebaseConfig";
+import { useDemoData } from "@/src/data/DemoDataProvider";
+import SeedService from "@/src/services/seedService";
 import {
   BorderRadius,
   Spacing,
@@ -27,24 +29,22 @@ type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 function SectionHeader({ title }: { title: string }) {
   const { colors } = useAppTheme();
   return (
-    <Text style={{
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: 11,
-      fontWeight: "700",
-      textTransform: "uppercase",
-      letterSpacing: 0.6,
-      paddingHorizontal: Spacing.lg,
-      marginTop: Spacing.sm,
-    }}>
-      {title}
+    <Text
+      style={{
+        ...Typography.overline,
+        color: colors.textSecondary,
+        paddingHorizontal: Spacing.lg,
+        marginTop: Spacing.md,
+        marginBottom: Spacing.xs,
+      }}
+    >
+      {title.toUpperCase()}
     </Text>
   );
 }
 
 function SettingRow({
   icon,
-  iconColor,
   label,
   hint,
   value,
@@ -52,7 +52,6 @@ function SettingRow({
   last,
 }: {
   icon: IconName;
-  iconColor?: string;
   label: string;
   hint?: string;
   value: boolean;
@@ -61,16 +60,18 @@ function SettingRow({
 }) {
   const { colors } = useAppTheme();
   return (
-    <View style={[
-      rowStyles.row,
-      !last && { borderBottomWidth: 1, borderBottomColor: colors.border },
-    ]}>
-      <View style={[rowStyles.iconWrap, { backgroundColor: (iconColor ?? colors.primary) + "22" }]}>
-        <MaterialCommunityIcons name={icon} size={16} color={iconColor ?? colors.primary} />
-      </View>
+    <View
+      style={[
+        rowStyles.row,
+        !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+      ]}
+    >
+      <MaterialCommunityIcons name={icon} size={20} color={colors.textSecondary} />
       <View style={rowStyles.copy}>
         <Text style={[rowStyles.label, { color: colors.text }]}>{label}</Text>
-        {hint && <Text style={[rowStyles.hint, { color: colors.textSecondary }]}>{hint}</Text>}
+        {hint ? (
+          <Text style={[rowStyles.hint, { color: colors.textSecondary }]}>{hint}</Text>
+        ) : null}
       </View>
       <Switch
         value={value}
@@ -84,8 +85,6 @@ function SettingRow({
 
 function NavRow({
   icon,
-  iconColor,
-  iconBg,
   label,
   hint,
   onPress,
@@ -93,34 +92,31 @@ function NavRow({
   last,
 }: {
   icon: IconName;
-  iconColor?: string;
-  iconBg?: string;
   label: string;
   hint?: string;
   onPress: () => void;
   danger?: boolean;
   last?: boolean;
 }) {
-  const { colors, isDark } = useAppTheme();
-  const fg = danger ? colors.error : (iconColor ?? colors.primary);
-  const bg = iconBg ?? (danger
-    ? (isDark ? "#3A1414" : "#FEE2E2")
-    : fg + "22");
+  const { colors } = useAppTheme();
+  const fg = danger ? colors.error : colors.textSecondary;
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         rowStyles.row,
-        !last && { borderBottomWidth: 1, borderBottomColor: colors.border },
-        pressed && { opacity: 0.7 },
+        !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+        pressed && { opacity: 0.6 },
       ]}
     >
-      <View style={[rowStyles.iconWrap, { backgroundColor: bg }]}>
-        <MaterialCommunityIcons name={icon} size={16} color={fg} />
-      </View>
+      <MaterialCommunityIcons name={icon} size={20} color={fg} />
       <View style={rowStyles.copy}>
-        <Text style={[rowStyles.label, { color: danger ? colors.error : colors.text }]}>{label}</Text>
-        {hint && <Text style={[rowStyles.hint, { color: colors.textSecondary }]}>{hint}</Text>}
+        <Text style={[rowStyles.label, { color: danger ? colors.error : colors.text }]}>
+          {label}
+        </Text>
+        {hint ? (
+          <Text style={[rowStyles.hint, { color: colors.textSecondary }]}>{hint}</Text>
+        ) : null}
       </View>
       <MaterialCommunityIcons name="chevron-right" size={18} color={colors.textSecondary} />
     </Pressable>
@@ -131,16 +127,9 @@ const rowStyles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.lg,
     paddingVertical: 13,
-  },
-  iconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
   },
   copy: { flex: 1, gap: 1 },
   label: {
@@ -158,14 +147,16 @@ const rowStyles = StyleSheet.create({
 function Card({ children }: { children: React.ReactNode }) {
   const { colors } = useAppTheme();
   return (
-    <View style={{
-      marginHorizontal: Spacing.lg,
-      backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      overflow: "hidden",
-    }}>
+    <View
+      style={{
+        marginHorizontal: Spacing.lg,
+        backgroundColor: colors.surfaceCard,
+        borderRadius: BorderRadius.md,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: colors.border,
+        overflow: "hidden",
+      }}
+    >
       {children}
     </View>
   );
@@ -173,7 +164,9 @@ function Card({ children }: { children: React.ReactNode }) {
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { colors, isDark, mode, toggleTheme } = useAppTheme();
+  const { colors, mode, toggleTheme } = useAppTheme();
+  const { currentUserId, createArea, createPlant } = useDemoData();
+  const styles = createStyles(colors);
 
   const [notifRiego, setNotifRiego] = useState(true);
   const [notifDiag, setNotifDiag] = useState(true);
@@ -181,6 +174,43 @@ export default function SettingsScreen() {
   const [reduceMotion, setReduceMotion] = useState(false);
   const [hapticsEnabled, setHapticsEnabled] = useState(true);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isSeeding, setIsSeeding] = useState(false);
+
+  const handleSeed = () => {
+    Alert.alert(
+      "Llenar con datos de ejemplo",
+      "Se crearán áreas, plantas y registros de diagnóstico de muestra en tu cuenta. Úsalo en una cuenta de demostración.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Llenar",
+          onPress: () => {
+            void (async () => {
+              try {
+                setIsSeeding(true);
+                const summary = await SeedService.seedDemoData({
+                  currentUserId,
+                  createArea,
+                  createPlant,
+                });
+                Alert.alert(
+                  "Datos creados",
+                  `Se agregaron ${summary.areas} áreas, ${summary.plants} plantas y ${summary.diagnoses} diagnósticos.`,
+                );
+              } catch (e) {
+                Alert.alert(
+                  "Error",
+                  e instanceof Error ? e.message : "No se pudieron crear los datos.",
+                );
+              } finally {
+                setIsSeeding(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  };
 
   const handleSignOut = async () => {
     try {
@@ -203,7 +233,8 @@ export default function SettingsScreen() {
         {
           text: "Borrar todo",
           style: "destructive",
-          onPress: () => Alert.alert("Próximamente", "Esta función estará disponible en la próxima versión."),
+          onPress: () =>
+            Alert.alert("Próximamente", "Esta función estará disponible en la próxima versión."),
         },
       ],
     );
@@ -214,46 +245,27 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }}>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Pressable
+          onPress={() => router.back()}
+          hitSlop={10}
+          style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
+        >
+          <MaterialCommunityIcons name="chevron-left" size={26} color={colors.text} />
+        </Pressable>
+        <Text style={styles.headerTitle}>Configuración</Text>
+        <View style={{ width: 26 }} />
+      </View>
+
       <ScrollView
-        contentContainerStyle={{ paddingBottom: 120, gap: Spacing.sm, paddingTop: Spacing.sm }}
+        contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: Spacing.sm,
-          paddingHorizontal: Spacing.lg,
-          paddingVertical: Spacing.sm,
-        }}>
-          <Pressable
-            onPress={() => router.back()}
-            style={({ pressed }) => [{
-              width: 40, height: 40, borderRadius: 20,
-              alignItems: "center", justifyContent: "center",
-              backgroundColor: colors.surfaceCard,
-              borderWidth: 1, borderColor: colors.border,
-            }, pressed && { opacity: 0.7 }]}
-          >
-            <MaterialCommunityIcons name="arrow-left" size={20} color={colors.text} />
-          </Pressable>
-          <View>
-            <Text style={{ color: colors.text, fontFamily: Typography.family, fontSize: 22, fontWeight: "800", letterSpacing: -0.3 }}>
-              Configuración
-            </Text>
-            <Text style={{ color: colors.textSecondary, fontFamily: Typography.family, fontSize: 13, fontWeight: "500" }}>
-              App y privacidad
-            </Text>
-          </View>
-        </View>
-
-        {/* Apariencia */}
         <SectionHeader title="Apariencia" />
         <Card>
           <NavRow
             icon={mode === "dark" ? "weather-night" : "weather-sunny"}
-            iconColor={mode === "dark" ? "#8B5CF6" : "#F59E0B"}
             label={mode === "dark" ? "Modo oscuro" : "Modo claro"}
             hint="Toca para cambiar el tema"
             onPress={toggleTheme}
@@ -261,12 +273,10 @@ export default function SettingsScreen() {
           />
         </Card>
 
-        {/* Notificaciones */}
         <SectionHeader title="Notificaciones" />
         <Card>
           <SettingRow
             icon="water-outline"
-            iconColor={colors.accentCool}
             label="Recordatorios de riego"
             hint="Alertas cuando toque regar una planta"
             value={notifRiego}
@@ -274,7 +284,6 @@ export default function SettingsScreen() {
           />
           <SettingRow
             icon="stethoscope"
-            iconColor={colors.accentWarm}
             label="Diagnósticos programados"
             hint="Aviso cuando una planta necesita revisión"
             value={notifDiag}
@@ -282,7 +291,6 @@ export default function SettingsScreen() {
           />
           <SettingRow
             icon="chart-bar"
-            iconColor={colors.primary}
             label="Resumen semanal"
             hint="Reporte de salud de tu colección cada lunes"
             value={notifResumen}
@@ -291,12 +299,10 @@ export default function SettingsScreen() {
           />
         </Card>
 
-        {/* Accesibilidad */}
         <SectionHeader title="Accesibilidad" />
         <Card>
           <SettingRow
             icon="motion-sensor-off"
-            iconColor={colors.accentLavender}
             label="Reducir animaciones"
             hint="Menos movimiento en transiciones"
             value={reduceMotion}
@@ -304,7 +310,6 @@ export default function SettingsScreen() {
           />
           <SettingRow
             icon="vibrate"
-            iconColor={colors.primary}
             label="Vibración táctil"
             hint="Respuesta háptica en acciones"
             value={hapticsEnabled}
@@ -313,12 +318,10 @@ export default function SettingsScreen() {
           />
         </Card>
 
-        {/* Permisos */}
         <SectionHeader title="Permisos del sistema" />
         <Card>
           <NavRow
             icon="shield-lock-outline"
-            iconColor={colors.primary}
             label="Gestionar permisos"
             hint="Cámara, ubicación y notificaciones"
             onPress={() => void Linking.openSettings()}
@@ -326,19 +329,16 @@ export default function SettingsScreen() {
           />
         </Card>
 
-        {/* Privacidad */}
         <SectionHeader title="Privacidad y datos" />
         <Card>
           <NavRow
             icon="database-export-outline"
-            iconColor={colors.accentCool}
             label="Exportar mis datos"
             hint="Descarga un archivo con toda tu información"
             onPress={handleExport}
           />
           <NavRow
             icon="account-edit-outline"
-            iconColor={colors.primary}
             label="Editar perfil"
             hint="Nombre, usuario y foto"
             onPress={() => router.push("/(app)/forms/user")}
@@ -353,20 +353,16 @@ export default function SettingsScreen() {
           />
         </Card>
 
-        {/* Acerca de */}
         <SectionHeader title="Acerca de" />
         <Card>
           <NavRow
             icon="github"
-            iconColor={isDark ? "#E2E8F0" : "#1E293B"}
-            iconBg={isDark ? "#2D3748" : "#F1F5F9"}
             label="Código fuente"
             hint="github.com/FranMoraCz17/planty"
             onPress={() => void Linking.openURL("https://github.com/FranMoraCz17/planty")}
           />
           <NavRow
             icon="leaf"
-            iconColor={colors.primary}
             label="Versión"
             hint="Planty v1.0 — EIF411 UNA Brunca 2025"
             onPress={() => {}}
@@ -374,7 +370,17 @@ export default function SettingsScreen() {
           />
         </Card>
 
-        {/* Cuenta */}
+        <SectionHeader title="Desarrollo" />
+        <Card>
+          <NavRow
+            icon="database-plus-outline"
+            label={isSeeding ? "Creando datos..." : "Llenar con datos de ejemplo"}
+            hint="Áreas, plantas y diagnósticos de muestra"
+            onPress={handleSeed}
+            last
+          />
+        </Card>
+
         <SectionHeader title="Cuenta" />
         <Card>
           <NavRow
@@ -385,8 +391,32 @@ export default function SettingsScreen() {
             last
           />
         </Card>
-
       </ScrollView>
     </SafeAreaView>
   );
 }
+
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.surface },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.sm,
+    },
+    backBtn: {
+      width: 26,
+      alignItems: "flex-start",
+      justifyContent: "center",
+    },
+    headerTitle: {
+      ...Typography.title,
+      color: colors.text,
+    },
+    content: {
+      paddingBottom: 120,
+      gap: Spacing.xs,
+    },
+  });
