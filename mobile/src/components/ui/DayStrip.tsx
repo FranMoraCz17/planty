@@ -150,7 +150,9 @@ function DayChip({
 const styles = StyleSheet.create({
   wrap: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingBottom: Spacing.sm,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.md,
+    marginTop: Spacing.sm,
   },
   strip: {
     paddingHorizontal: Spacing.lg,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   ActivityIndicator,
   Alert,
@@ -70,6 +70,24 @@ const CATEGORY_COLOR: Record<DiagnoseIssueCategory, string> = {
   exceso:       "#0284C7",
   ambiental:    "#64748B",
 };
+
+const ISO_TODAY = new Date().toISOString().slice(0, 10);
+const CLINIC_DAYS_AHEAD = 14;
+
+function addDaysIso(isoDate: string, days: number): string {
+  const d = new Date(isoDate + "T00:00:00");
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// Fecha ISO del próximo diagnóstico recomendado para una planta.
+function nextDiagnoseIso(last: DiagnoseRecord | null): string {
+  const base = last ? new Date(last.createdAt) : new Date();
+  const interval = last ? (RECHECK_DAYS[last.healthStatus] ?? 30) : 0;
+  const next = new Date(base);
+  next.setDate(next.getDate() + interval);
+  return next.toISOString().slice(0, 10);
+}
 
 // Calcula días hasta el próximo diagnóstico recomendado
 function nextDiagnoseDate(last: DiagnoseRecord | null): { date: string; daysLeft: number } {
@@ -516,7 +534,7 @@ function PlantClinicModal({
                     <MaterialCommunityIcons name="stethoscope" size={48} color={colors.textSecondary} />
                     <Text style={[mStyles.emptyTitle, { color: colors.text }]}>Sin diagnósticos</Text>
                     <Text style={[mStyles.emptyBody, { color: colors.textSecondary }]}>
-                      Tocá "Analizar" para hacer el primer diagnóstico fitopatológico de esta planta.
+                      Tocá «Analizar» para hacer el primer diagnóstico fitopatológico de esta planta.
                     </Text>
                   </View>
                 ) : (
@@ -678,14 +696,23 @@ const mStyles = StyleSheet.create({
 
 export default function ClinicScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ plantId?: string }>();
   const { colors, isDark } = useAppTheme();
   const { getPlantsByUser, currentUserId } = useDemoData();
   const styles = createStyles(colors, isDark);
 
   const userPlants = getPlantsByUser(currentUserId);
+  const openedFromParam = useRef(false);
   const [lastDiagnoses, setLastDiagnoses] = useState<Record<string, DiagnoseRecord | null>>({});
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [selectedPlant, setSelectedPlant] = useState<PlantDocument | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string>(ISO_TODAY);
+
+  const days = useMemo(() => {
+    const arr: string[] = [];
+    for (let i = 0; i < CLINIC_DAYS_AHEAD; i += 1) arr.push(addDaysIso(ISO_TODAY, i));
+    return arr;
+  }, []);
 
   useEffect(() => {
     if (userPlants.length === 0) { setLoadingHistory(false); return; }
@@ -706,6 +733,16 @@ export default function ClinicScreen() {
     });
     return () => { cancelled = true; };
   }, [userPlants.length]);
+
+  // Si venimos del detalle de una planta (?plantId=), abrimos su clínica directo.
+  useEffect(() => {
+    if (openedFromParam.current || !params.plantId) return;
+    const target = userPlants.find((p) => p.id === params.plantId);
+    if (target) {
+      setSelectedPlant(target);
+      openedFromParam.current = true;
+    }
+  }, [params.plantId, userPlants]);
 
   // Ordenar: urgentes primero (daysLeft <= 0), luego por daysLeft asc
   const sortedPlants = useMemo(() => {
@@ -730,6 +767,40 @@ export default function ClinicScreen() {
       }, 0) / userPlants.length)
     : 0;
 
+  // Bucket de cada planta: el día recomendado de su próximo diagnóstico
+  // (los vencidos se agrupan en hoy).
+  const bucketFor = useCallback(
+    (plantId: string) => {
+      const iso = nextDiagnoseIso(lastDiagnoses[plantId] ?? null);
+      return iso < ISO_TODAY ? ISO_TODAY : iso;
+    },
+    [lastDiagnoses],
+  );
+
+  const recommendedDays = useMemo(() => {
+    const set = new Set<string>();
+    userPlants.forEach((p) => set.add(bucketFor(p.id)));
+    return set;
+  }, [userPlants, bucketFor]);
+
+  const doneDays = useMemo(() => {
+    const set = new Set<string>();
+    Object.values(lastDiagnoses).forEach((d) => {
+      if (d) set.add(d.createdAt.slice(0, 10));
+    });
+    return set;
+  }, [lastDiagnoses]);
+
+  const plantsForDay = useMemo(
+    () => sortedPlants.filter((p) => bucketFor(p.id) === selectedDate),
+    [sortedPlants, bucketFor, selectedDate],
+  );
+
+  const dayLabel = useMemo(() => {
+    const d = new Date(selectedDate + "T00:00:00");
+    return d.toLocaleDateString("es-CR", { weekday: "long", day: "numeric", month: "long" });
+  }, [selectedDate]);
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.headerBar}>
@@ -747,13 +818,24 @@ export default function ClinicScreen() {
         )}
       </View>
 
+      <DayStrip
+        days={days}
+        selected={selectedDate}
+        todayIso={ISO_TODAY}
+        onSelect={setSelectedDate}
+        markFor={(iso) => ({
+          primary: recommendedDays.has(iso),
+          secondary: doneDays.has(iso),
+        })}
+      />
+
       {loadingHistory ? (
         <View style={styles.centered}>
           <ActivityIndicator color={colors.primary} size="large" />
         </View>
       ) : (
         <FlatList
-          data={sortedPlants}
+          data={plantsForDay}
           keyExtractor={(p) => p.id}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
@@ -793,8 +875,13 @@ export default function ClinicScreen() {
                 </View>
               </View>
 
+              <Text style={[styles.dayTitle, { color: colors.text }]}>
+                {dayLabel}
+              </Text>
               <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-                PLANTAS — ordenadas por urgencia
+                {selectedDate === ISO_TODAY
+                  ? "REVISIONES DE HOY Y VENCIDAS"
+                  : "REVISIONES RECOMENDADAS"}
               </Text>
             </>
           }
@@ -810,8 +897,11 @@ export default function ClinicScreen() {
           ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
-              <MaterialCommunityIcons name="leaf-off" size={48} color={colors.textSecondary} />
-              <Text style={[styles.emptyTitle, { color: colors.text }]}>Sin plantas</Text>
+              <MaterialCommunityIcons name="calendar-check-outline" size={44} color={colors.textSecondary} />
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>Nada para este día</Text>
+              <Text style={[styles.headerSub, { textAlign: "center" }]}>
+                Tocá otro día en la tira para ver sus revisiones.
+              </Text>
             </View>
           }
         />
@@ -847,6 +937,7 @@ const createStyles = (colors: ThemeColors, _isDark: boolean) =>
     globalDot: { width: 8, height: 8, borderRadius: 4 },
     globalStatVal: { fontFamily: Typography.family, fontSize: 18, fontWeight: "800" },
     globalStatLbl: { fontFamily: Typography.family, fontSize: 10, fontWeight: "600" },
+    dayTitle: { fontFamily: Typography.serif, fontSize: 22, fontWeight: "700", letterSpacing: -0.3, textTransform: "capitalize", marginBottom: 2 },
     sectionLabel: { fontFamily: Typography.family, fontSize: 10, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase", marginBottom: Spacing.sm },
     emptyWrap: { alignItems: "center", paddingVertical: Spacing.xl, gap: Spacing.md },
     emptyTitle: { fontFamily: Typography.family, fontSize: 15, fontWeight: "800" },

@@ -460,6 +460,16 @@ export default function PlantDetailScreen() {
             {diagnoseHistory.map((entry, i) => (
               <DiagnoseEntry key={i} entry={entry} colors={colors} isDark={isDark} />
             ))}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Ver diagnóstico completo en la clínica"
+              onPress={() => router.push(`/(app)/clinic?plantId=${plant.id}`)}
+              style={({ pressed }) => [styles.clinicLink, pressed && { opacity: 0.7 }]}
+            >
+              <MaterialCommunityIcons name="stethoscope" size={16} color={colors.primary} />
+              <Text style={styles.clinicLinkText}>Ver diagnóstico completo</Text>
+              <MaterialCommunityIcons name="chevron-right" size={16} color={colors.primary} />
+            </Pressable>
           </View>
         )}
 
@@ -879,5 +889,23 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     careHint: {
       color: colors.textSecondary, fontFamily: Typography.family,
       fontSize: 12, fontStyle: "italic", textAlign: "center", marginTop: 2,
+    },
+    clinicLink: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.sm,
+      marginTop: Spacing.xs,
+      paddingVertical: Spacing.sm,
+      paddingHorizontal: Spacing.md,
+      borderRadius: BorderRadius.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.primary,
+    },
+    clinicLinkText: {
+      flex: 1,
+      color: colors.primary,
+      fontFamily: Typography.family,
+      fontSize: Typography.body.fontSize - 1,
+      fontWeight: "700",
     },
   });
