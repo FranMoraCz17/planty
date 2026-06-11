@@ -144,12 +144,11 @@ export default function HomeTab() {
               <View>
                 <Text style={styles.sectionTitle}>Tu coleccion</Text>
                 <Text style={styles.sectionSubtitle}>
-                  {plants.length}{" "}
-                  {plants.length === 1 ? "planta activa" : "plantas activas"}
+                  {plants.length} {plants.length === 1 ? "planta" : "plantas"}
                 </Text>
               </View>
               <Pressable
-                onPress={() => router.push("/(app)/(tabs)/my-plants")}
+                onPress={() => router.push("/(app)/(tabs)/collection")}
                 accessibilityLabel="Ver todas las plantas"
                 accessibilityRole="button"
                 hitSlop={8}
@@ -208,7 +207,7 @@ export default function HomeTab() {
                   <View>
                     <Text style={styles.sectionTitle}>Proximas tareas</Text>
                     <Text style={styles.sectionSubtitle}>
-                      Despues de la mas urgente
+                      Después de la más urgente
                     </Text>
                   </View>
                 </View>
@@ -224,16 +223,14 @@ export default function HomeTab() {
                         pressed && styles.taskRowPressed,
                       ]}
                     >
-                      <View style={styles.taskIcon}>
-                        <MaterialCommunityIcons
-                          name="water"
-                          size={16}
-                          color={colors.onPrimary}
-                        />
-                      </View>
+                      <MaterialCommunityIcons
+                        name="water-outline"
+                        size={20}
+                        color={colors.primary}
+                      />
                       <View style={styles.taskBody}>
                         <Text style={styles.taskTitle} numberOfLines={1}>
-                          Regar {task.plant.name}
+                          {task.plant.name}
                         </Text>
                         <Text style={styles.taskSubtitle}>
                           En {task.daysAway}{" "}
@@ -295,9 +292,7 @@ export default function HomeTab() {
                 <>
                   <Text style={styles.contextEmoji}>🌡️</Text>
                   <Text style={styles.contextBlockLabel}>Sin clima</Text>
-                  <Text style={styles.contextBlockMeta}>
-                    Activa ubicacion
-                  </Text>
+                  <Text style={styles.contextBlockMeta}>Activa ubicacion</Text>
                 </>
               )}
             </View>
@@ -553,8 +548,8 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       position: "absolute",
       top: 6,
       left: 6,
-      backgroundColor: "rgba(0,0,0,0.7)",
-      borderRadius: BorderRadius.full,
+      backgroundColor: "rgba(10,12,8,0.55)",
+      borderRadius: BorderRadius.sm,
       paddingHorizontal: Spacing.sm,
       paddingVertical: 3,
     },
@@ -736,14 +731,6 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     taskRowPressed: {
       opacity: 0.8,
-    },
-    taskIcon: {
-      width: 28,
-      height: 28,
-      borderRadius: 14,
-      backgroundColor: colors.primary,
-      alignItems: "center",
-      justifyContent: "center",
     },
     taskBody: {
       flex: 1,

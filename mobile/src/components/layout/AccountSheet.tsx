@@ -103,12 +103,12 @@ export default function AccountSheet({ visible, onClose }: AccountSheetProps) {
       key: "about",
       icon: "information",
       label: "Acerca de Planty",
-      description: "Versión 1.0 — Curso EIF209",
+      description: "Versión 1.0",
       color: "#64748B",
       onPress: () =>
         Alert.alert(
           "Planty",
-          "Aplicación móvil para el cuidado e identificación de plantas con IA.\n\nProyecto del curso EIF209 — Universidad Nacional, Sede Regional Brunca.",
+          "franmorac17"
         ),
     },
   ];
