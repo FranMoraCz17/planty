@@ -1,5 +1,10 @@
 import { ScrollView, StyleSheet, Text, Pressable } from "react-native";
-import { Spacing, Typography, type ThemeColors } from "@/src/theme/designSystem";
+import {
+  BorderRadius,
+  Spacing,
+  Typography,
+  type ThemeColors,
+} from "@/src/theme/designSystem";
 import { useAppTheme } from "@/src/theme/ThemeProvider";
 
 type FilterPill = {
@@ -37,10 +42,7 @@ export default function SearchFilterPills({
         <Pressable
           key={filter.id}
           onPress={() => onFilterChange(filter.id)}
-          style={[
-            styles.pill,
-            activeFilter === filter.id && styles.activePill,
-          ]}
+          style={[styles.pill, activeFilter === filter.id && styles.activePill]}
         >
           <Text
             style={[
@@ -65,20 +67,22 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     pill: {
       paddingHorizontal: Spacing.md,
-      paddingVertical: Spacing.sm,
-      borderRadius: 100,
+      paddingVertical: Spacing.sm - 1,
+      borderRadius: BorderRadius.md,
+      borderWidth: StyleSheet.hairlineWidth,
       backgroundColor: colors.surfaceCard,
     },
     activePill: {
-      backgroundColor: colors.primary,
+      backgroundColor: colors.text,
+      borderColor: colors.text,
     },
     pillText: {
       color: colors.textSecondary,
       fontFamily: Typography.family,
-      fontSize: 15,
+      fontSize: 14,
       fontWeight: "600",
     },
     activePillText: {
-      color: colors.onPrimary,
+      color: colors.surface,
     },
   });

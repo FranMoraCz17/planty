@@ -1,8 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import {
-  Animated,
-  Easing,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -13,9 +11,9 @@ import {
   Text,
   TextInput,
   View,
+  SafeAreaView,
 } from "react-native";
 import PlantsCatalogService, {
-  type PlantCatalogCategory,
   type PlantCatalogItem,
 } from "@/src/services/plantsCatalogService";
 import PlantPhotoService from "@/src/services/plantPhotoService";
@@ -26,21 +24,13 @@ import {
   type ThemeColors,
 } from "@/src/theme/designSystem";
 import { useAppTheme } from "@/src/theme/ThemeProvider";
+import SearchFilterPills from "@/src/components/search/SearchFilterPills";
 
 interface SearchSheetProps {
   visible: boolean;
   onClose: () => void;
   onSelect?: (item: PlantCatalogItem) => void;
 }
-
-const CATEGORY_COLORS: Record<PlantCatalogCategory, string> = {
-  domestica: "#16A34A",
-  agricola: "#B45309",
-  hortaliza: "#65A30D",
-  aromatica: "#0E7490",
-  ornamental: "#A21CAF",
-  arbol: "#4D7C0F",
-};
 
 export default function SearchSheet({
   visible,
@@ -50,31 +40,19 @@ export default function SearchSheet({
   const { colors, isDark } = useAppTheme();
   const styles = createStyles(colors, isDark);
   const [query, setQuery] = useState("");
-  const slideAnim = useRef(new Animated.Value(0)).current;
+  const [activeFilter, setActiveFilter] = useState("all");
 
   useEffect(() => {
-    if (visible) {
-      Animated.timing(slideAnim, {
-        toValue: 1,
-        duration: 240,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
-    } else {
-      slideAnim.setValue(0);
+    if (!visible) {
       setQuery("");
+      setActiveFilter("all");
     }
-  }, [visible, slideAnim]);
+  }, [visible]);
 
   const results = useMemo(
     () => PlantsCatalogService.search(query, 40),
     [query],
   );
-
-  const translateY = slideAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [600, 0],
-  });
 
   const handleSelect = (item: PlantCatalogItem) => {
     onSelect?.(item);
@@ -84,31 +62,33 @@ export default function SearchSheet({
   return (
     <Modal
       visible={visible}
-      transparent
+      transparent={false}
       animationType="fade"
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Animated.View
-          style={[styles.sheet, { transform: [{ translateY }] }]}
-          onStartShouldSetResponder={() => true}
+      <SafeAreaView style={styles.container}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={{ flex: 1 }}
         >
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
-            style={{ flex: 1 }}
-          >
-            <View style={styles.handle} />
-
+          <View style={styles.header}>
+            <Pressable onPress={onClose} hitSlop={10}>
+              <MaterialCommunityIcons
+                name="chevron-left"
+                size={30}
+                color={colors.text}
+              />
+            </Pressable>
             <View style={styles.searchInputWrap}>
               <MaterialCommunityIcons
                 name="magnify"
-                size={20}
+                size={22}
                 color={colors.textSecondary}
               />
               <TextInput
                 accessibilityLabel="Buscar planta"
-                placeholder="Cafe, monstera, maiz, romero..."
+                placeholder="Buscar especie o síntoma..."
                 placeholderTextColor={colors.disabled}
                 value={query}
                 onChangeText={setQuery}
@@ -118,7 +98,7 @@ export default function SearchSheet({
                 style={styles.searchInput}
                 returnKeyType="search"
               />
-              {query.length > 0 ? (
+              {query.length > 0 && (
                 <Pressable
                   accessibilityLabel="Limpiar busqueda"
                   accessibilityRole="button"
@@ -127,51 +107,62 @@ export default function SearchSheet({
                 >
                   <MaterialCommunityIcons
                     name="close-circle"
-                    size={18}
+                    size={20}
                     color={colors.disabled}
                   />
                 </Pressable>
-              ) : null}
-            </View>
-
-            <Text style={styles.resultsLabel}>
-              {query.trim()
-                ? `${results.length} resultado${results.length === 1 ? "" : "s"}`
-                : "Sugerencias"}
-            </Text>
-
-            <FlatList
-              data={results}
-              keyExtractor={(item, idx) =>
-                `${item.commonName}-${item.scientificName}-${idx}`
-              }
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.list}
-              ListEmptyComponent={
-                <View style={styles.emptyWrap}>
-                  <MaterialCommunityIcons
-                    name="leaf-off"
-                    size={36}
-                    color={colors.textSecondary}
-                  />
-                  <Text style={styles.emptyText}>
-                    Sin resultados. Toca la cámara para identificar con IA.
-                  </Text>
-                </View>
-              }
-              renderItem={({ item }) => (
-                <ResultRow
-                  item={item}
-                  colors={colors}
-                  isDark={isDark}
-                  onPress={() => handleSelect(item)}
-                />
               )}
+            </View>
+          </View>
+
+          <View style={styles.pillsWrap}>
+            <SearchFilterPills
+              activeFilter={activeFilter}
+              onFilterChange={setActiveFilter}
             />
-          </KeyboardAvoidingView>
-        </Animated.View>
-      </Pressable>
+          </View>
+
+          <Text style={styles.resultsLabel}>
+            {query.trim()
+              ? `${results.length} resultado${results.length === 1 ? "" : "s"}`
+              : "Sugerencias"}
+          </Text>
+
+          <FlatList
+            data={results}
+            keyExtractor={(item, idx) =>
+              `${item.commonName}-${item.scientificName}-${idx}`
+            }
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.list}
+            ListEmptyComponent={
+              <View style={styles.emptyWrap}>
+                <MaterialCommunityIcons
+                  name="magnify-remove-outline"
+                  size={48}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.emptyTitle}>
+                  No se encontraron resultados
+                </Text>
+                <Text style={styles.emptyText}>
+                  Intenta con otra búsqueda o usa la cámara para identificar una
+                  planta.
+                </Text>
+              </View>
+            }
+            renderItem={({ item }) => (
+              <ResultRow
+                item={item}
+                colors={colors}
+                isDark={isDark}
+                onPress={() => handleSelect(item)}
+              />
+            )}
+          />
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </Modal>
   );
 }
@@ -192,15 +183,15 @@ function ResultRow({
 
   useEffect(() => {
     let cancelled = false;
-    void PlantPhotoService.fetchSpeciesPhoto(item.scientificName).then((url) => {
-      if (!cancelled) setPhoto(url);
-    });
+    void PlantPhotoService.fetchSpeciesPhoto(item.scientificName).then(
+      (url) => {
+        if (!cancelled) setPhoto(url);
+      },
+    );
     return () => {
       cancelled = true;
     };
   }, [item.scientificName]);
-
-  const categoryColor = CATEGORY_COLORS[item.category];
 
   return (
     <Pressable
@@ -213,11 +204,13 @@ function ResultRow({
         {photo ? (
           <Image source={{ uri: photo }} style={styles.rowPhoto} />
         ) : (
-          <MaterialCommunityIcons
-            name="leaf"
-            size={22}
-            color={colors.onPrimary}
-          />
+          <View style={styles.rowPhotoPlaceholder}>
+            <MaterialCommunityIcons
+              name="flower-tulip-outline"
+              size={24}
+              color={colors.textSecondary}
+            />
+          </View>
         )}
       </View>
       <View style={styles.rowBody}>
@@ -225,24 +218,12 @@ function ResultRow({
           {item.commonName}
         </Text>
         <Text style={styles.rowSci} numberOfLines={1}>
-          {item.scientificName}
+          {item.scientificName} · {item.family}
         </Text>
-        <View style={styles.rowMeta}>
-          <View
-            style={[styles.categoryDot, { backgroundColor: categoryColor }]}
-          />
-          <Text style={styles.rowCategory}>
-            {PlantsCatalogService.getCategoryLabel(item.category)}
-          </Text>
-          <Text style={styles.rowDot}>·</Text>
-          <Text style={styles.rowFamily} numberOfLines={1}>
-            {item.family}
-          </Text>
-        </View>
       </View>
       <MaterialCommunityIcons
         name="chevron-right"
-        size={18}
+        size={22}
         color={colors.textSecondary}
       />
     </Pressable>
@@ -251,43 +232,29 @@ function ResultRow({
 
 const createStyles = (colors: ThemeColors, isDark: boolean) =>
   StyleSheet.create({
-    backdrop: {
+    container: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.55)",
-      justifyContent: "flex-end",
-    },
-    sheet: {
-      height: "85%",
       backgroundColor: colors.surface,
-      borderTopLeftRadius: 28,
-      borderTopRightRadius: 28,
-      paddingHorizontal: Spacing.lg,
-      paddingTop: Spacing.sm,
-      shadowColor: "#000",
-      shadowOffset: { width: 0, height: -4 },
-      shadowOpacity: 0.15,
-      shadowRadius: 12,
-      elevation: 16,
     },
-    handle: {
-      alignSelf: "center",
-      width: 42,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: colors.border,
-      marginTop: 6,
-      marginBottom: Spacing.md,
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: Spacing.sm,
+      paddingTop: Platform.OS === "android" ? Spacing.md : 0,
+      paddingBottom: Spacing.sm,
+      gap: Spacing.sm,
     },
     searchInputWrap: {
+      flex: 1,
       flexDirection: "row",
       alignItems: "center",
       gap: Spacing.sm,
       backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.full,
-      borderWidth: 1,
+      borderRadius: BorderRadius.md,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
       paddingHorizontal: Spacing.md,
-      height: 50,
+      height: 46,
     },
     searchInput: {
       flex: 1,
@@ -296,101 +263,87 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontSize: Typography.body.fontSize,
       paddingVertical: 0,
     },
+    pillsWrap: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      paddingBottom: Spacing.sm,
+    },
     resultsLabel: {
       color: colors.textSecondary,
       fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
+      fontSize: Typography.caption.fontSize,
       fontWeight: "700",
       textTransform: "uppercase",
-      letterSpacing: 0.5,
+      letterSpacing: 0.8,
       marginTop: Spacing.md,
       marginBottom: Spacing.sm,
+      paddingHorizontal: Spacing.md,
     },
     list: {
+      paddingHorizontal: Spacing.sm,
       paddingBottom: Spacing.xxl,
-      gap: Spacing.xs,
     },
     emptyWrap: {
       alignItems: "center",
       justifyContent: "center",
-      paddingVertical: Spacing.xxl,
-      gap: Spacing.sm,
+      paddingTop: Spacing.xxl * 2,
+      gap: Spacing.md,
+      paddingHorizontal: Spacing.lg,
+    },
+    emptyTitle: {
+      color: colors.text,
+      fontFamily: Typography.family,
+      fontSize: Typography.title.fontSize,
+      fontWeight: "700",
     },
     emptyText: {
       color: colors.textSecondary,
       fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize - 1,
+      fontSize: Typography.body.fontSize,
       textAlign: "center",
-      maxWidth: 260,
+      lineHeight: 22,
     },
     row: {
       flexDirection: "row",
       alignItems: "center",
-      gap: Spacing.sm,
-      paddingVertical: Spacing.sm,
-      paddingHorizontal: Spacing.sm,
-      borderRadius: BorderRadius.md,
+      gap: Spacing.md,
+      padding: Spacing.sm,
+      borderRadius: BorderRadius.lg,
     },
     rowPressed: {
-      backgroundColor: isDark ? "#22332F" : "#EEF7F3",
+      backgroundColor: colors.surface,
     },
     rowPhotoWrap: {
-      width: 44,
-      height: 44,
+      width: 56,
+      height: 56,
       borderRadius: BorderRadius.md,
-      backgroundColor: colors.primary,
-      alignItems: "center",
-      justifyContent: "center",
       overflow: "hidden",
     },
     rowPhoto: {
       width: "100%",
       height: "100%",
     },
+    rowPhotoPlaceholder: {
+      width: "100%",
+      height: "100%",
+      backgroundColor: colors.surface,
+      alignItems: "center",
+      justifyContent: "center",
+    },
     rowBody: {
       flex: 1,
-      gap: 1,
+      gap: 2,
     },
     rowCommon: {
       color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize,
+      fontFamily: Typography.serif,
+      fontSize: Typography.body.fontSize + 1,
       fontWeight: "700",
     },
     rowSci: {
       color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
+      fontFamily: Typography.serif,
       fontStyle: "italic",
-      fontWeight: "500",
-    },
-    rowMeta: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      marginTop: 1,
-    },
-    categoryDot: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-    },
-    rowCategory: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize,
-      fontWeight: "700",
-    },
-    rowDot: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize,
-    },
-    rowFamily: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize,
-      fontWeight: "500",
-      flexShrink: 1,
+      fontSize: Typography.caption.fontSize + 1,
     },
   });
