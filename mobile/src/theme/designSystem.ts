@@ -126,6 +126,63 @@ export const BorderRadius = {
   full: 999,
 } as const;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Clínica — paleta de severidad clínica (tabs Estado / Historial / Reporte).
+// Reutiliza los acentos del sistema "Herbario" en vez de colores genéricos de IA.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ClinicHealthStatus = "saludable" | "atencion" | "enferma" | "critica";
+export type ClinicIssueSeverity = "baja" | "media" | "alta";
+export type ClinicIssueCategory = "plaga" | "enfermedad" | "deficiencia" | "exceso" | "ambiental";
+
+const ClinicHealthColorsLight: Record<ClinicHealthStatus, string> = {
+  saludable: LightColors.primary,
+  atencion: LightColors.accentWarm,
+  enferma: LightColors.error,
+  critica: "#7A2418",
+};
+
+const ClinicHealthColorsDark: Record<ClinicHealthStatus, string> = {
+  saludable: DarkColors.primary,
+  atencion: DarkColors.accentWarm,
+  enferma: DarkColors.error,
+  critica: "#C24A3A",
+};
+
+const ClinicSeverityColorsLight: Record<ClinicIssueSeverity, string> = {
+  baja: LightColors.accentCool,
+  media: LightColors.accentWarm,
+  alta: LightColors.error,
+};
+
+const ClinicSeverityColorsDark: Record<ClinicIssueSeverity, string> = {
+  baja: DarkColors.accentCool,
+  media: DarkColors.accentWarm,
+  alta: DarkColors.error,
+};
+
+const ClinicCategoryColorsLight: Record<ClinicIssueCategory, string> = {
+  plaga: LightColors.error,
+  enfermedad: LightColors.accentLavender,
+  deficiencia: LightColors.accentWarm,
+  exceso: LightColors.accentCool,
+  ambiental: LightColors.textSecondary,
+};
+
+const ClinicCategoryColorsDark: Record<ClinicIssueCategory, string> = {
+  plaga: DarkColors.error,
+  enfermedad: DarkColors.accentLavender,
+  deficiencia: DarkColors.accentWarm,
+  exceso: DarkColors.accentCool,
+  ambiental: DarkColors.textSecondary,
+};
+
+export function getClinicColors(mode: ThemeMode) {
+  return mode === "dark"
+    ? { health: ClinicHealthColorsDark, severity: ClinicSeverityColorsDark, category: ClinicCategoryColorsDark }
+    : { health: ClinicHealthColorsLight, severity: ClinicSeverityColorsLight, category: ClinicCategoryColorsLight };
+}
+
 export const DesignSystem = {
   Colors,
   Fonts,

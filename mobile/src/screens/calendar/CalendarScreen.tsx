@@ -1,15 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
+  Animated,
+  Easing,
   Image,
   Modal,
+  PanResponder,
   Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
@@ -391,6 +395,11 @@ function TaskFocusModal({
     userPhotoUri: item?.plantPhotoUri,
     scientificName: item?.scientificName ?? null,
   });
+  const [showRain, setShowRain] = useState(false);
+
+  useEffect(() => {
+    setShowRain(false);
+  }, [index]);
 
   if (!item) {
     return (
@@ -400,19 +409,29 @@ function TaskFocusModal({
 
   const done = isDoneAt(index);
   const needsWater = item.types.has("watering");
-  const hasPrev = index > 0;
   const hasNext = index < items.length - 1;
   const taskLabel = needsWater ? "Riego de hoy" : "Revisión de salud";
   const taskHint = needsWater
-    ? "Regá esta planta y márcala como lista."
-    : "Hacé una revisión de salud con la IA.";
+    ? "Regá esta planta y deslizá para marcarla como lista."
+    : "Hacé una revisión de salud con la IA y deslizá cuando termines.";
 
-  const goPrev = () => setIndex((i) => Math.max(0, i - 1));
   const goNext = () => setIndex((i) => Math.min(items.length - 1, i + 1));
+
   const confirm = () => {
     onToggleDone(index);
-    if (hasNext) setIndex((i) => i + 1);
-    else onClose();
+    if (needsWater && !done) {
+      setShowRain(true);
+      setTimeout(() => {
+        setShowRain(false);
+        if (hasNext) goNext();
+        else onClose();
+      }, 1600);
+    } else {
+      setTimeout(() => {
+        if (hasNext) goNext();
+        else onClose();
+      }, 280);
+    }
   };
 
   const topPad = Math.max(insets.top, 52);
@@ -432,6 +451,9 @@ function TaskFocusModal({
           style={StyleSheet.absoluteFill}
           pointerEvents="none"
         />
+
+        {/* Lluvia cayendo sobre la planta — solo al regarla */}
+        {showRain ? <RainOverlay /> : null}
 
         {/* Cerrar + contador */}
         <View style={[focusStyles.topBar, { paddingTop: topPad }]}>
@@ -459,68 +481,176 @@ function TaskFocusModal({
           <Text style={focusStyles.hint}>{taskHint}</Text>
         </View>
 
-        {/* Barra inferior: anterior / confirmar / siguiente */}
+        {/* Slide para marcar como hecha (estilo alarma de iPhone) + siguiente tarea */}
         <View style={[focusStyles.bar, { paddingBottom: bottomPad }]}>
-          <FocusButton
-            icon="chevron-left"
-            disabled={!hasPrev}
-            onPress={goPrev}
-            accessibilityLabel="Tarea anterior"
-          />
+          <View style={focusStyles.slideWrap}>
+            <SlideToConfirm
+              done={done}
+              onConfirm={confirm}
+              onUndo={() => onToggleDone(index)}
+              colors={colors}
+            />
+          </View>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={done ? "Marcada como hecha" : "Marcar como hecha"}
-            onPress={confirm}
-            style={({ pressed }) => [
-              focusStyles.confirmBtn,
-              { backgroundColor: done ? colors.primary : "rgba(255,255,255,0.16)" },
-              pressed && { opacity: 0.85 },
-            ]}
-          >
-            {!done ? (
-              <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
-            ) : null}
-            <View style={[focusStyles.confirmBorder, done && { borderColor: colors.primary }]} />
-            <MaterialCommunityIcons name="check" size={34} color="#fff" />
-          </Pressable>
-          <FocusButton
-            icon="chevron-right"
+            accessibilityLabel="Tarea siguiente"
             disabled={!hasNext}
             onPress={goNext}
-            accessibilityLabel="Tarea siguiente"
-          />
+            style={({ pressed }) => [
+              focusStyles.nextBtn,
+              { opacity: !hasNext ? 0.3 : pressed ? 0.7 : 1 },
+            ]}
+          >
+            <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+            <View style={focusStyles.glassTint} />
+            <MaterialCommunityIcons name="chevron-right" size={24} color="#fff" />
+          </Pressable>
         </View>
       </View>
     </Modal>
   );
 }
 
-function FocusButton({
-  icon,
-  disabled,
-  onPress,
-  accessibilityLabel,
+// ── Slide-to-confirm tipo "deslizar para apagar alarma" de iOS ──
+const SLIDE_THUMB_SIZE = 52;
+const SLIDE_TRACK_PADDING = 4;
+
+function SlideToConfirm({
+  done,
+  onConfirm,
+  onUndo,
+  colors,
 }: {
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
-  disabled?: boolean;
-  onPress: () => void;
-  accessibilityLabel: string;
+  done: boolean;
+  onConfirm: () => void;
+  onUndo: () => void;
+  colors: ThemeColors;
 }) {
+  const pan = useRef(new Animated.Value(0)).current;
+  const [trackWidth, setTrackWidth] = useState(0);
+  const maxX = Math.max(0, trackWidth - SLIDE_THUMB_SIZE - SLIDE_TRACK_PADDING * 2);
+
+  const maxXRef = useRef(maxX);
+  maxXRef.current = maxX;
+  const onConfirmRef = useRef(onConfirm);
+  onConfirmRef.current = onConfirm;
+  const doneRef = useRef(done);
+  doneRef.current = done;
+
+  useEffect(() => {
+    pan.setValue(done ? maxXRef.current : 0);
+  }, [done, pan, maxX]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => !doneRef.current,
+      onMoveShouldSetPanResponder: (_, g) => !doneRef.current && Math.abs(g.dx) > 2,
+      onPanResponderMove: (_, g) => {
+        const x = Math.min(Math.max(g.dx, 0), maxXRef.current);
+        pan.setValue(x);
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dx >= maxXRef.current * 0.65) {
+          Animated.timing(pan, { toValue: maxXRef.current, duration: 120, useNativeDriver: false }).start(() => {
+            onConfirmRef.current();
+          });
+        } else {
+          Animated.spring(pan, { toValue: 0, friction: 6, useNativeDriver: false }).start();
+        }
+      },
+    }),
+  ).current;
+
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      onPress={onPress}
-      disabled={disabled}
-      style={({ pressed }) => [
-        focusStyles.navBtn,
-        { opacity: disabled ? 0.3 : pressed ? 0.7 : 1 },
-      ]}
+    <View
+      style={focusStyles.slideTrack}
+      onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
     >
       <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
-      <View style={focusStyles.glassTint} />
-      <MaterialCommunityIcons name={icon} size={24} color="#fff" />
-    </Pressable>
+      <View style={focusStyles.slideTint} />
+      <Animated.View
+        style={[
+          focusStyles.slideFill,
+          { width: Animated.add(pan, SLIDE_THUMB_SIZE + SLIDE_TRACK_PADDING), backgroundColor: colors.primary },
+        ]}
+      />
+      <Text style={focusStyles.slideLabel}>
+        {done ? "¡Listo! Tocá para deshacer" : "Deslizá para marcar como hecha"}
+      </Text>
+      {done ? (
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={onUndo}
+          accessibilityRole="button"
+          accessibilityLabel="Deshacer, marcar como pendiente"
+        />
+      ) : null}
+      <Animated.View
+        {...(done ? {} : panResponder.panHandlers)}
+        style={[
+          focusStyles.slideThumb,
+          { backgroundColor: done ? colors.primary : "#fff", transform: [{ translateX: pan }] },
+        ]}
+      >
+        <MaterialCommunityIcons
+          name={done ? "check" : "chevron-double-right"}
+          size={22}
+          color={done ? "#fff" : colors.primary}
+        />
+      </Animated.View>
+    </View>
+  );
+}
+
+// ── Lluvia cayendo desde arriba sobre la foto de la planta ──
+const RAIN_DROPS = 16;
+
+function RainOverlay() {
+  const { width, height } = useWindowDimensions();
+  const drops = useRef(
+    Array.from({ length: RAIN_DROPS }, () => ({
+      x: Math.random() * width,
+      delay: Math.random() * 1800,
+      duration: 1000 + Math.random() * 800,
+      anim: new Animated.Value(0),
+    })),
+  ).current;
+
+  useEffect(() => {
+    const loops = drops.map((d) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(d.delay),
+          Animated.timing(d.anim, {
+            toValue: 1,
+            duration: d.duration,
+            easing: Easing.linear,
+            useNativeDriver: true,
+          }),
+          Animated.timing(d.anim, { toValue: 0, duration: 0, useNativeDriver: true }),
+        ]),
+      ),
+    );
+    loops.forEach((l) => l.start());
+    return () => loops.forEach((l) => l.stop());
+  }, [drops]);
+
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {drops.map((d, i) => {
+        const translateY = d.anim.interpolate({ inputRange: [0, 1], outputRange: [-30, height * 0.65] });
+        const opacity = d.anim.interpolate({ inputRange: [0, 0.1, 0.85, 1], outputRange: [0, 0.6, 0.6, 0] });
+        return (
+          <Animated.View
+            key={i}
+            style={[
+              focusStyles.raindrop,
+              { left: d.x, opacity, transform: [{ translateY }] },
+            ]}
+          />
+        );
+      })}
+    </View>
   );
 }
 
@@ -608,33 +738,70 @@ const focusStyles = StyleSheet.create({
     bottom: 0,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.xl,
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.md,
   },
-  navBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+  slideWrap: { width: "75%" },
+  nextBtn: {
+    flex: 1,
+    height: SLIDE_THUMB_SIZE + SLIDE_TRACK_PADDING * 2,
+    borderRadius: (SLIDE_THUMB_SIZE + SLIDE_TRACK_PADDING * 2) / 2,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,0.3)",
   },
-  confirmBtn: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    alignItems: "center",
+  slideTrack: {
+    height: SLIDE_THUMB_SIZE + SLIDE_TRACK_PADDING * 2,
+    borderRadius: (SLIDE_THUMB_SIZE + SLIDE_TRACK_PADDING * 2) / 2,
     justifyContent: "center",
     overflow: "hidden",
   },
-  confirmBorder: {
+  slideTint: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 38,
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.6)",
+    backgroundColor: "rgba(0,0,0,0.25)",
+    borderRadius: (SLIDE_THUMB_SIZE + SLIDE_TRACK_PADDING * 2) / 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.25)",
+  },
+  slideFill: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: (SLIDE_THUMB_SIZE + SLIDE_TRACK_PADDING * 2) / 2,
+  },
+  slideLabel: {
+    textAlign: "center",
+    color: "#fff",
+    fontFamily: Typography.family,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  slideThumb: {
+    position: "absolute",
+    left: SLIDE_TRACK_PADDING,
+    top: SLIDE_TRACK_PADDING,
+    width: SLIDE_THUMB_SIZE,
+    height: SLIDE_THUMB_SIZE,
+    borderRadius: SLIDE_THUMB_SIZE / 2,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  raindrop: {
+    position: "absolute",
+    top: 0,
+    width: 2,
+    height: 16,
+    borderRadius: 1,
+    backgroundColor: "rgba(255,255,255,0.55)",
   },
 });
 
@@ -730,7 +897,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     cardGlassTint: {
       ...StyleSheet.absoluteFillObject,
-      backgroundColor: isDark ? "rgba(16,18,13,0.60)" : "rgba(248,246,240,0.72)",
+      backgroundColor: isDark ? "rgba(16,18,13,0.60)" : "rgba(248,246,240,0.45)",
     },
     plantThumbWrap: {
       width: 60,

@@ -1,14 +1,20 @@
-# Planty
+# Planty 🌿
 
-A mobile application for plant management and care built with Expo, FastAPI, and AI-powered plant identification.
-
-> Academic project — EIF411 Mobile Platform Design and Implementation, Universidad Nacional, Sede Regional Brunca.
+A cross-platform mobile app for plant collection management, AI-powered health diagnosis, and care scheduling. Built as a course project for **EIF411 – Mobile Platform Design & Implementation** at Universidad Nacional de Costa Rica.
 
 ---
 
-## Overview
+## Features
 
-Planty lets authenticated users register their plants, identify new ones from a photo using AI, and track care routines. The app is designed for real-world usage where internet connectivity isn't always reliable — it detects network state, queues changes made offline, and syncs them automatically when the connection is restored.
+- **Plant Collection** — add, edit, and organize plants with photos, care notes, and location areas
+- **AI Identification & Diagnosis** — Gemini Vision API identifies species and generates phytopathological health reports (issues, severity level, immediate actions, estimated recovery)
+- **Phytopathological Clinic** — cross-plant diagnostics view sortable by urgency/severity; full diagnosis history timeline per plant with expandable detail cards
+- **Care Calendar** — day-strip scheduling with an immersive full-screen task modal; iOS-style slide-to-confirm interactions and a rain animation on watering tasks
+- **Herbarium & Search** — browse species with glass-card UI and filter pills
+- **Favorites** — save daily plant facts locally via AsyncStorage
+- **Auth & Profile** — Firebase Auth (email/password); user profile with photo gallery and photo bleed-fade effect
+- **Dark / Light mode** — system-aware theming with in-app toggle
+- **Custom "liquid glass" UI** — animated tab bar with spring physics, blur sheets, fullscreen gallery viewer, image bleed-fade component
 
 ---
 
@@ -16,99 +22,54 @@ Planty lets authenticated users register their plants, identify new ones from a 
 
 | Layer | Technology |
 |---|---|
-| Mobile | Expo SDK 54, React Native 0.81, TypeScript (strict) |
-| Navigation | Expo Router (file-based routing) |
-| Auth & DB | Firebase Authentication + Firestore |
-| Forms | React Hook Form + Zod |
-| Camera | expo-camera, expo-media-library |
-| Local storage | expo-sqlite |
-| Network detection | @react-native-community/netinfo |
-| Backend | FastAPI, Python 3.12, Firebase Admin SDK |
-| AI | Gemini 2.5 Flash via Google AI Studio API |
-| Deployment | Render (backend) |
+| Mobile | Expo SDK ~54, Expo Router 6, React Native 0.81, React 19, TypeScript (strict) |
+| State | React Context API + `useState` |
+| Forms | react-hook-form + Zod |
+| Auth & DB | Firebase Auth, Firestore, Firebase Storage |
+| AI | Gemini Vision API (Google AI Studio) |
+| Backend | FastAPI (Python 3.11) + Firebase Admin SDK — deployed on Render |
+| Local storage | AsyncStorage |
+| Animations | React Native Animated API (spring, PanResponder) |
+| Styling | Custom design system in `designSystem.ts` — no external UI library |
 
 ---
 
-## Repository Structure
+## Structure
 
 ```
 planty-monorepo/
-├── mobile/       Expo app (React Native + TypeScript)
-├── api/          FastAPI backend (Python)
-├── .gitignore
-└── README.md
+├── mobile/          # Expo app
+│   ├── app/         # Expo Router — routing and layouts only
+│   └── src/
+│       ├── components/   # UI components (GlassCard, AnimatedTabBar, PhotoDetailSheet…)
+│       ├── screens/      # Screen logic (CalendarScreen, ClinicScreen, CollectionScreen…)
+│       ├── services/     # Firebase/API calls (plantService, diagnoseService…)
+│       ├── hooks/        # Custom hooks (usePlantPhoto, useCamera…)
+│       └── theme/        # Design tokens and ThemeProvider
+├── api/             # FastAPI backend
+└── docs/            # Architecture notes and assignment docs
 ```
 
 ---
 
 ## Getting Started
 
-### Mobile app
-
-1. Copy the environment file and configure the backend URL:
-
 ```bash
-cp mobile/.env.example mobile/.env
-# Set EXPO_PUBLIC_API_URL to your local or Render backend URL
-```
-
-2. Install dependencies and start the dev server:
-
-```bash
-cd mobile
+# Install dependencies
 npm install
-npx expo start
+
+# Start the mobile app
+cd mobile && npx expo start
+
+# Start the backend
+cd api && python -m uvicorn main:app --reload --port 8000
 ```
 
-### Backend
-
-1. Copy the environment file and configure credentials:
-
-```bash
-cp api/.env.example api/.env
-# Set FIREBASE_SERVICE_ACCOUNT_PATH and GEMINI_API_KEY
-# Place serviceAccountKey.json at the monorepo root (never commit it)
-```
-
-2. Create a virtual environment, install dependencies, and run:
-
-```bash
-cd api
-python -m venv .venv
-
-# Windows
-.venv\Scripts\activate
-# macOS / Linux
-source .venv/bin/activate
-
-pip install -r requirements.txt
-uvicorn main:app --reload --host 127.0.0.1 --port 8000
-```
-
-The backend exposes a `/health` endpoint and interactive API docs at `/docs` (Swagger UI).
+You'll need a `mobile/.env` with your Firebase config keys and `GEMINI_API_KEY`.
 
 ---
 
-## Offline Support
+## Author
 
-Planty handles connectivity gracefully across all screens. An `OfflineBanner` component renders inside the authenticated layout and appears automatically whenever the network is lost, disappearing once the connection is restored.
-
-| Screen | Offline behavior |
-|---|---|
-| Home | Works offline — reads from the local cache populated at login |
-| My Plants | Full read and edit access offline; changes are queued and synced on reconnect |
-| Identify | Requires connection — depends on the backend and Gemini; shows a clear message when offline |
-| Care | Read access to reminders and history; task completions are queued |
-| Profile | Works offline — reads from the user document loaded at login |
-| Edit forms (plant & user) | Work offline; changes are applied locally and synced on reconnect |
-
-### Why expo-sqlite?
-
-The app's data model is relational by nature (users → plants → care events → reminders). expo-sqlite was chosen over AsyncStorage, MMKV, WatermelonDB, and Realm because it fits this structure natively without extra abstraction layers or licensing constraints.
-
----
-
-## Repository Rules
-
-- Never commit `serviceAccountKey.json` or any `.env` files.
-- Commits follow the Conventional Commits format (`feat`, `fix`, `refactor`, `docs`, `chore`).
+Francisco Mora Cabezas — [github.com/FranMoraCz17](https://github.com/FranMoraCz17)  
+EIF411, UNA Brunca · 2026

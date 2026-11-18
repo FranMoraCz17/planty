@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   ActivityIndicator,
   Image,
@@ -16,6 +17,8 @@ import TopBar from "@/src/components/layout/TopBar";
 import SearchSheet from "@/src/components/layout/SearchSheet";
 import { useTodayContext } from "@/src/hooks/useTodayContext";
 import { usePlantPhoto } from "@/src/hooks/usePlantPhoto";
+import PlantFactService from "@/src/services/plantFactService";
+import FavoriteFactsService from "@/src/services/favoriteFactsService";
 import type { PlantDocument } from "@/src/services/plantService";
 import {
   BorderRadius,
@@ -76,7 +79,6 @@ export default function HomeTab() {
 
   const heroTask = upcomingTasks[0] ?? null;
   const nextDays = upcomingTasks[0]?.daysAway ?? null;
-  const restTasks = upcomingTasks.slice(1, 4);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -137,6 +139,14 @@ export default function HomeTab() {
               />
             ) : null}
 
+            {heroTask ? (
+              <FeaturedFactCard
+                scientificName={heroTask.plant.scientificName}
+                colors={colors}
+                isDark={isDark}
+              />
+            ) : null}
+
             {/* ============== BLOQUE 2: COLECCION ============== */}
             <SectionDivider />
 
@@ -159,21 +169,20 @@ export default function HomeTab() {
 
             <View style={styles.statsRow}>
               <StatChip
-                icon="water"
                 value={nextDays === null ? "-" : `${nextDays}d`}
-                label="Proximo riego"
+                label="Próximo riego"
                 colors={colors}
                 isDark={isDark}
               />
+              <View style={styles.statDivider} />
               <StatChip
-                icon="map-marker-radius-outline"
                 value={`${new Set(plants.map((p) => p.locationName)).size}`}
                 label="Sitios"
                 colors={colors}
                 isDark={isDark}
               />
+              <View style={styles.statDivider} />
               <StatChip
-                icon="calendar-month-outline"
                 value={`${upcomingTasks.length}`}
                 label="Tareas"
                 colors={colors}
@@ -198,55 +207,6 @@ export default function HomeTab() {
                 />
               ))}
             </ScrollView>
-
-            {/* ============== BLOQUE 3: PROXIMAS TAREAS ============== */}
-            {restTasks.length > 0 ? (
-              <>
-                <SectionDivider />
-                <View style={styles.sectionHeader}>
-                  <View>
-                    <Text style={styles.sectionTitle}>Proximas tareas</Text>
-                    <Text style={styles.sectionSubtitle}>
-                      Después de la más urgente
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.taskList}>
-                  {restTasks.map((task) => (
-                    <Pressable
-                      key={task.plant.id}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Tarea de ${task.plant.name}`}
-                      onPress={() => router.push("/(app)/(tabs)/calendar")}
-                      style={({ pressed }) => [
-                        styles.taskRow,
-                        pressed && styles.taskRowPressed,
-                      ]}
-                    >
-                      <MaterialCommunityIcons
-                        name="water-outline"
-                        size={20}
-                        color={colors.primary}
-                      />
-                      <View style={styles.taskBody}>
-                        <Text style={styles.taskTitle} numberOfLines={1}>
-                          {task.plant.name}
-                        </Text>
-                        <Text style={styles.taskSubtitle}>
-                          En {task.daysAway}{" "}
-                          {task.daysAway === 1 ? "dia" : "dias"}
-                        </Text>
-                      </View>
-                      <MaterialCommunityIcons
-                        name="chevron-right"
-                        size={16}
-                        color={colors.textSecondary}
-                      />
-                    </Pressable>
-                  ))}
-                </View>
-              </>
-            ) : null}
           </>
         )}
 
@@ -320,6 +280,13 @@ function SectionDivider() {
   return <View style={{ height: Spacing.md }} />;
 }
 
+function getCareNote(daysAway: number): string {
+  if (daysAway <= 0) return "Hoy le viene bien un poco de agua";
+  if (daysAway === 1) return "Mañana conviene regarla";
+  if (daysAway <= 3) return "Conviene regarla esta semana";
+  return "Por ahora esta tranquila, disfrutala";
+}
+
 function HeroTaskCard({
   task,
   colors,
@@ -337,65 +304,118 @@ function HeroTaskCard({
     scientificName: task.plant.scientificName,
   });
 
-  const urgencyLabel =
-    task.daysAway === 0
-      ? "Hoy"
-      : task.daysAway === 1
-        ? "Manana"
-        : `En ${task.daysAway} dias`;
-
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Tarea destacada: ${task.plant.name} ${urgencyLabel}`}
+      accessibilityLabel={`Destacada hoy: ${task.plant.name}`}
       onPress={onPress}
       style={({ pressed }) => [styles.heroCard, pressed && styles.heroPressed]}
     >
-      <View style={styles.heroPhotoWrap}>
-        {photoUri ? (
-          <Image
-            source={{ uri: photoUri }}
-            style={styles.heroPhoto}
-            accessibilityIgnoresInvertColors
-          />
-        ) : (
+      {photoUri ? (
+        <Image
+          source={{ uri: photoUri }}
+          style={styles.heroImage}
+          accessibilityIgnoresInvertColors
+        />
+      ) : (
+        <View style={styles.heroImageFallback}>
           <MaterialCommunityIcons
             name="leaf"
-            size={44}
+            size={48}
             color={colors.onPrimary}
           />
-        )}
-        <View style={styles.heroBadge}>
-          <Text style={styles.heroBadgeText}>{urgencyLabel}</Text>
         </View>
-      </View>
-      <View style={styles.heroBody}>
-        <Text style={styles.heroOverline}>Proxima tarea</Text>
-        <Text style={styles.heroTitle}>Regar {task.plant.name}</Text>
-        <Text style={styles.heroSubtitle}>
-          {task.plant.scientificName} - cada {task.cycle} dias
-        </Text>
-        <View style={styles.heroCta}>
-          <Text style={styles.heroCtaText}>Ver calendario</Text>
+      )}
+      <LinearGradient
+        colors={["transparent", "rgba(10,12,8,0.05)", "rgba(10,12,8,0.92)"]}
+        locations={[0, 0.4, 1]}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <View style={styles.heroContent}>
+        <Text style={styles.heroOverline}>Destacada hoy</Text>
+        <Text style={styles.heroTitle}>{task.plant.name}</Text>
+        <Text style={styles.heroSubtitle}>{task.plant.scientificName}</Text>
+        <View style={styles.heroCareRow}>
           <MaterialCommunityIcons
-            name="arrow-right"
+            name="water-outline"
             size={14}
-            color={colors.primary}
+            color="rgba(255,255,255,0.85)"
           />
+          <Text style={styles.heroCareText}>{getCareNote(task.daysAway)}</Text>
         </View>
       </View>
     </Pressable>
   );
 }
 
+function FeaturedFactCard({
+  scientificName,
+  colors,
+  isDark,
+}: {
+  scientificName: string;
+  colors: ThemeColors;
+  isDark: boolean;
+}) {
+  const styles = createStyles(colors, isDark);
+  const [fact, setFact] = useState<string | null>(null);
+  const [isFavorite, setIsFavorite] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void PlantFactService.getDailyFact(scientificName).then((value) => {
+      if (!cancelled) setFact(value);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [scientificName]);
+
+  useEffect(() => {
+    if (!fact) return;
+    let cancelled = false;
+    void FavoriteFactsService.isFavorite(scientificName, fact).then((value) => {
+      if (!cancelled) setIsFavorite(value);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [scientificName, fact]);
+
+  if (!fact) return null;
+
+  const handleToggleFavorite = () => {
+    void FavoriteFactsService.toggleFavorite(scientificName, fact).then(setIsFavorite);
+  };
+
+  return (
+    <View style={styles.factCard}>
+      <View style={styles.factHeader}>
+        <Text style={styles.factOverline}>Sabias que...</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={isFavorite ? "Quitar de favoritos" : "Guardar en favoritos"}
+          onPress={handleToggleFavorite}
+          hitSlop={8}
+        >
+          <MaterialCommunityIcons
+            name={isFavorite ? "heart" : "heart-outline"}
+            size={18}
+            color={isFavorite ? colors.error : colors.textSecondary}
+          />
+        </Pressable>
+      </View>
+      <Text style={styles.factText}>{fact}</Text>
+    </View>
+  );
+}
+
 function StatChip({
-  icon,
   value,
   label,
   colors,
   isDark,
 }: {
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
   value: string;
   label: string;
   colors: ThemeColors;
@@ -404,13 +424,8 @@ function StatChip({
   const styles = createStyles(colors, isDark);
   return (
     <View style={styles.statChip}>
-      <View style={styles.statChipIcon}>
-        <MaterialCommunityIcons name={icon} size={14} color={colors.primary} />
-      </View>
-      <View style={styles.statChipText}>
-        <Text style={styles.statChipValue}>{value}</Text>
-        <Text style={styles.statChipLabel}>{label}</Text>
-      </View>
+      <Text style={styles.statChipValue}>{value}</Text>
+      <Text style={styles.statChipLabel}>{label}</Text>
     </View>
   );
 }
@@ -442,27 +457,34 @@ function PlantThumbCard({
         pressed && styles.thumbCardPressed,
       ]}
     >
-      <View style={styles.thumbImageWrap}>
-        {photoUri ? (
-          <Image
-            source={{ uri: photoUri }}
-            style={styles.thumbImage}
-            accessibilityIgnoresInvertColors
-          />
-        ) : (
+      {photoUri ? (
+        <Image
+          source={{ uri: photoUri }}
+          style={styles.thumbImage}
+          accessibilityIgnoresInvertColors
+        />
+      ) : (
+        <View style={styles.thumbImageFallback}>
           <MaterialCommunityIcons
             name="leaf"
             size={28}
             color={colors.onPrimary}
           />
-        )}
+        </View>
+      )}
+      <LinearGradient
+        colors={["transparent", "rgba(10,12,8,0.05)", "rgba(10,12,8,0.88)"]}
+        locations={[0, 0.45, 1]}
+        style={StyleSheet.absoluteFillObject}
+      />
+      <View style={styles.thumbContent}>
+        <Text style={styles.thumbName} numberOfLines={1}>
+          {plant.name}
+        </Text>
+        <Text style={styles.thumbLocation} numberOfLines={1}>
+          {plant.locationName}
+        </Text>
       </View>
-      <Text style={styles.thumbName} numberOfLines={1}>
-        {plant.name}
-      </Text>
-      <Text style={styles.thumbLocation} numberOfLines={1}>
-        {plant.locationName}
-      </Text>
     </Pressable>
   );
 }
@@ -485,9 +507,9 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     searchBar: {
       minHeight: 48,
-      borderRadius: BorderRadius.full,
+      borderRadius: BorderRadius.md,
       backgroundColor: colors.surfaceCard,
-      borderWidth: 1,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
       paddingHorizontal: Spacing.md,
       flexDirection: "row",
@@ -519,86 +541,97 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
 
     // Hero
     heroCard: {
-      flexDirection: "row",
-      gap: Spacing.md,
-      backgroundColor: colors.surfaceCard,
+      height: 210,
       borderRadius: BorderRadius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: Spacing.md,
-    },
-    heroPressed: {
-      opacity: 0.9,
-    },
-    heroPhotoWrap: {
-      width: 110,
-      height: 110,
-      borderRadius: BorderRadius.lg,
-      backgroundColor: colors.primary,
-      alignItems: "center",
-      justifyContent: "center",
       overflow: "hidden",
       position: "relative",
+      backgroundColor: colors.surfaceCard,
     },
-    heroPhoto: {
+    heroPressed: {
+      opacity: 0.93,
+    },
+    heroImage: {
+      ...StyleSheet.absoluteFillObject,
       width: "100%",
       height: "100%",
     },
-    heroBadge: {
-      position: "absolute",
-      top: 6,
-      left: 6,
-      backgroundColor: "rgba(10,12,8,0.55)",
-      borderRadius: BorderRadius.sm,
-      paddingHorizontal: Spacing.sm,
-      paddingVertical: 3,
-    },
-    heroBadgeText: {
-      color: "#FFFFFF",
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize,
-      fontWeight: "800",
-      textTransform: "uppercase",
-      letterSpacing: 0.4,
-    },
-    heroBody: {
-      flex: 1,
+    heroImageFallback: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: "center",
       justifyContent: "center",
-      gap: 4,
+      backgroundColor: colors.primary,
+    },
+    heroContent: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      padding: Spacing.lg,
+      gap: 3,
     },
     heroOverline: {
+      color: "rgba(255,255,255,0.7)",
+      fontFamily: Typography.family,
+      fontSize: Typography.caption.fontSize - 1,
+      fontWeight: "700",
+      textTransform: "uppercase",
+      letterSpacing: 1.2,
+    },
+    heroTitle: {
+      color: "#FFFFFF",
+      fontFamily: Typography.serif,
+      fontSize: Typography.title.fontSize,
+      fontWeight: "700",
+      letterSpacing: -0.3,
+    },
+    heroSubtitle: {
+      color: "rgba(255,255,255,0.78)",
+      fontFamily: Typography.serif,
+      fontStyle: "italic",
+      fontSize: Typography.caption.fontSize + 1,
+    },
+    heroCareRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginTop: Spacing.xs,
+    },
+    heroCareText: {
+      color: "rgba(255,255,255,0.85)",
+      fontFamily: Typography.serif,
+      fontStyle: "italic",
+      fontSize: Typography.caption.fontSize + 1,
+    },
+
+    // Sabias que...
+    factCard: {
+      backgroundColor: colors.surfaceCard,
+      borderRadius: BorderRadius.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      paddingVertical: Spacing.md,
+      paddingHorizontal: Spacing.md,
+      gap: 4,
+    },
+    factHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    factOverline: {
       color: colors.textSecondary,
       fontFamily: Typography.family,
       fontSize: Typography.caption.fontSize - 1,
       fontWeight: "700",
       textTransform: "uppercase",
-      letterSpacing: 0.6,
+      letterSpacing: 1.2,
     },
-    heroTitle: {
+    factText: {
       color: colors.text,
       fontFamily: Typography.serif,
-      fontSize: Typography.body.fontSize + 6,
-      fontWeight: "700",
-      letterSpacing: -0.3,
-      lineHeight: Typography.body.lineHeight + 6,
-    },
-    heroSubtitle: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
-      fontWeight: "500",
-    },
-    heroCta: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      marginTop: 4,
-    },
-    heroCtaText: {
-      color: colors.primary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize + 1,
-      fontWeight: "700",
+      fontStyle: "italic",
+      fontSize: Typography.body.fontSize,
+      lineHeight: Typography.body.lineHeight + 2,
     },
 
     // Headers de seccion
@@ -628,45 +661,35 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontWeight: "700",
     },
 
-    // Stats chips
+    // Stats
     statsRow: {
       flexDirection: "row",
-      gap: Spacing.sm,
+      alignItems: "center",
+      paddingVertical: Spacing.xs,
+    },
+    statDivider: {
+      width: StyleSheet.hairlineWidth,
+      height: 28,
+      backgroundColor: colors.border,
     },
     statChip: {
       flex: 1,
-      flexDirection: "row",
       alignItems: "center",
-      gap: Spacing.xs,
-      backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.md,
-      borderWidth: 1,
-      borderColor: colors.border,
-      paddingVertical: Spacing.sm,
-      paddingHorizontal: Spacing.sm,
-    },
-    statChipIcon: {
-      width: 24,
-      height: 24,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    statChipText: {
-      flex: 1,
-      gap: 0,
+      gap: 2,
     },
     statChipValue: {
       color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize,
-      fontWeight: "800",
-      lineHeight: Typography.body.lineHeight,
+      fontFamily: Typography.serif,
+      fontSize: Typography.body.fontSize + 5,
+      fontWeight: "700",
     },
     statChipLabel: {
       color: colors.textSecondary,
       fontFamily: Typography.family,
       fontSize: Typography.caption.fontSize - 1,
       fontWeight: "600",
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
     },
 
     // Carrusel
@@ -676,76 +699,45 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       paddingVertical: 4,
     },
     thumbCard: {
-      width: 130,
-      backgroundColor: colors.surfaceCard,
+      width: 132,
+      aspectRatio: 0.78,
       borderRadius: BorderRadius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: Spacing.sm,
-      gap: 4,
+      overflow: "hidden",
+      position: "relative",
+      backgroundColor: colors.surfaceCard,
     },
     thumbCardPressed: {
-      opacity: 0.8,
-    },
-    thumbImageWrap: {
-      width: "100%",
-      aspectRatio: 1,
-      borderRadius: BorderRadius.md,
-      backgroundColor: colors.primary,
-      alignItems: "center",
-      justifyContent: "center",
-      overflow: "hidden",
-      marginBottom: 4,
+      opacity: 0.92,
     },
     thumbImage: {
+      ...StyleSheet.absoluteFillObject,
       width: "100%",
       height: "100%",
     },
+    thumbImageFallback: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.primary,
+    },
+    thumbContent: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      padding: Spacing.sm,
+      gap: 1,
+    },
     thumbName: {
-      color: colors.text,
-      fontFamily: Typography.family,
+      color: "#FFFFFF",
+      fontFamily: Typography.serif,
       fontSize: Typography.body.fontSize - 1,
       fontWeight: "700",
     },
     thumbLocation: {
-      color: colors.textSecondary,
+      color: "rgba(255,255,255,0.75)",
       fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize,
-      fontWeight: "500",
-    },
-
-    // Lista de tareas
-    taskList: {
-      gap: Spacing.xs,
-    },
-    taskRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: Spacing.sm,
-      backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.md,
-      borderWidth: 1,
-      borderColor: colors.border,
-      paddingVertical: Spacing.sm,
-      paddingHorizontal: Spacing.sm,
-    },
-    taskRowPressed: {
-      opacity: 0.8,
-    },
-    taskBody: {
-      flex: 1,
-      gap: 1,
-    },
-    taskTitle: {
-      color: colors.text,
-      fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize - 1,
-      fontWeight: "700",
-    },
-    taskSubtitle: {
-      color: colors.textSecondary,
-      fontFamily: Typography.family,
-      fontSize: Typography.caption.fontSize,
+      fontSize: Typography.caption.fontSize - 1,
       fontWeight: "500",
     },
 
@@ -753,7 +745,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     contextCard: {
       backgroundColor: colors.surfaceCard,
       borderRadius: BorderRadius.lg,
-      borderWidth: 1,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
       paddingVertical: Spacing.md,
       paddingHorizontal: Spacing.md,
@@ -798,7 +790,7 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       alignItems: "flex-start",
       gap: Spacing.sm,
       paddingTop: Spacing.sm,
-      borderTopWidth: 1,
+      borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,
     },
     contextAdvice: {

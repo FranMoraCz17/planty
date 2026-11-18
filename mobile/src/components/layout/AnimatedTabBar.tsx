@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { BorderRadius, Spacing, Typography } from "@/src/theme/designSystem";
@@ -60,6 +61,21 @@ export default function AnimatedTabBar({
   const pillW = useRef(new Animated.Value(0)).current;
   const scanScale = useRef(new Animated.Value(1)).current;
   const scanRotate = useRef(new Animated.Value(0)).current;
+  const pressScales = useRef<Record<string, Animated.Value>>({}).current;
+
+  const getPressScale = (key: string) => {
+    if (!pressScales[key]) pressScales[key] = new Animated.Value(1);
+    return pressScales[key];
+  };
+
+  const squish = (key: string, toValue: number) => {
+    Animated.spring(getPressScale(key), {
+      toValue,
+      friction: 6,
+      tension: 120,
+      useNativeDriver: true,
+    }).start();
+  };
 
   const activeIndex = state.index;
   const activeRoute = state.routes[activeIndex];
@@ -69,16 +85,16 @@ export default function AnimatedTabBar({
   useEffect(() => {
     if (!activeLayout || activeIsCenter) return;
     Animated.parallel([
-      Animated.timing(pillX, {
+      Animated.spring(pillX, {
         toValue: activeLayout.x + PILL_HORIZONTAL_INSET,
-        duration: 280,
-        easing: Easing.out(Easing.cubic),
+        friction: 9,
+        tension: 80,
         useNativeDriver: false,
       }),
-      Animated.timing(pillW, {
+      Animated.spring(pillW, {
         toValue: activeLayout.width - PILL_HORIZONTAL_INSET * 2,
-        duration: 280,
-        easing: Easing.out(Easing.cubic),
+        friction: 9,
+        tension: 80,
         useNativeDriver: false,
       }),
     ]).start();
@@ -139,7 +155,7 @@ export default function AnimatedTabBar({
         ]}
       >
         <BlurView
-          intensity={Platform.OS === "ios" ? 60 : 95}
+          intensity={Platform.OS === "ios" ? 40 : 85}
           tint={isDark ? "dark" : "light"}
           style={StyleSheet.absoluteFill}
         />
@@ -148,13 +164,24 @@ export default function AnimatedTabBar({
             StyleSheet.absoluteFill,
             {
               backgroundColor: isDark
-                ? "rgba(20,20,20,0.55)"
-                : "rgba(255,255,255,0.65)",
+                ? "rgba(20,20,20,0.4)"
+                : "rgba(255,255,255,0.45)",
               borderColor: colors.border,
               borderWidth: 1,
               borderRadius: BorderRadius.full,
             },
           ]}
+        />
+        <LinearGradient
+          pointerEvents="none"
+          colors={
+            isDark
+              ? ["rgba(255,255,255,0.10)", "rgba(255,255,255,0)"]
+              : ["rgba(255,255,255,0.45)", "rgba(255,255,255,0)"]
+          }
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 0.7 }}
+          style={styles.sheen}
         />
         {/* Pill animada detras de los iconos */}
         {activeLayout && !activeIsCenter ? (
@@ -191,6 +218,8 @@ export default function AnimatedTabBar({
                 accessibilityRole="button"
                 accessibilityLabel="Identificar planta"
                 onPress={() => goTo(route.name, route.key, isFocused)}
+                onPressIn={() => squish(route.key, 0.92)}
+                onPressOut={() => squish(route.key, 1)}
                 style={styles.centerSlot}
               >
                 <Animated.View
@@ -203,7 +232,7 @@ export default function AnimatedTabBar({
                       borderColor: isDark ? "#0F0F0F" : "#FFFFFF",
                       shadowColor: colors.primary,
                       transform: [
-                        { scale: scanScale },
+                        { scale: Animated.multiply(scanScale, getPressScale(route.key)) },
                         { rotate: scanRotateInterpolated },
                       ],
                     },
@@ -226,22 +255,31 @@ export default function AnimatedTabBar({
               accessibilityRole="button"
               accessibilityLabel={label}
               onPress={() => goTo(route.name, route.key, isFocused)}
+              onPressIn={() => squish(route.key, 0.92)}
+              onPressOut={() => squish(route.key, 1)}
               style={styles.slot}
             >
-              <MaterialCommunityIcons
-                name={iconName}
-                size={20}
-                color={isFocused ? colors.primary : colors.disabled}
-              />
-              <Text
-                numberOfLines={1}
+              <Animated.View
                 style={[
-                  styles.label,
-                  { color: isFocused ? colors.primary : colors.disabled },
+                  styles.slotContent,
+                  { transform: [{ scale: getPressScale(route.key) }] },
                 ]}
               >
-                {label}
-              </Text>
+                <MaterialCommunityIcons
+                  name={iconName}
+                  size={20}
+                  color={isFocused ? colors.primary : colors.disabled}
+                />
+                <Text
+                  numberOfLines={1}
+                  style={[
+                    styles.label,
+                    { color: isFocused ? colors.primary : colors.disabled },
+                  ]}
+                >
+                  {label}
+                </Text>
+              </Animated.View>
             </Pressable>
           );
         })}
@@ -273,6 +311,15 @@ const styles = StyleSheet.create({
     bottom: PILL_VERTICAL_INSET,
     borderRadius: BorderRadius.full,
   },
+  sheen: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: "55%",
+    borderTopLeftRadius: BorderRadius.full,
+    borderTopRightRadius: BorderRadius.full,
+  },
   tabsRow: {
     flex: 1,
     flexDirection: "row",
@@ -282,6 +329,10 @@ const styles = StyleSheet.create({
   slot: {
     flex: 1,
     height: TAB_BAR_HEIGHT,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  slotContent: {
     alignItems: "center",
     justifyContent: "center",
     gap: 2,

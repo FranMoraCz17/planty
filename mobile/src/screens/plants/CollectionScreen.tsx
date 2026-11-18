@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { useDemoData } from "@/src/data/DemoDataProvider";
 import TopBar from "@/src/components/layout/TopBar";
-import { usePlantPhoto } from "@/src/hooks/usePlantPhoto";
+import AreaDetailSheet from "@/src/components/areas/AreaDetailSheet";
 import type { AreaDocument } from "@/src/services/areaService";
 import type { PlantDocument } from "@/src/services/plantService";
 import {
@@ -45,9 +45,8 @@ export default function CollectionScreen() {
   const styles = createStyles(colors, isDark);
   const plants = getPlantsByUser(currentUserId);
 
-  const [expandedAreas, setExpandedAreas] = useState<Set<string>>(
-    () => new Set(areas.map((a) => a.id).concat("unassigned")),
-  );
+  // Clave del área seleccionada para abrir su hoja de detalle ("unassigned" = sin área).
+  const [selectedAreaKey, setSelectedAreaKey] = useState<string | null>(null);
 
   const plantsByAreaId = useMemo(() => {
     const map = new Map<string, PlantDocument[]>();
@@ -67,14 +66,6 @@ export default function CollectionScreen() {
     const valid = plants.filter((p) => p.aiAnalyzed).length;
     return Math.round((valid / plants.length) * 100);
   }, [plants]);
-
-  const toggleArea = (areaId: string) => {
-    setExpandedAreas((prev) => {
-      const next = new Set(prev);
-      if (next.has(areaId)) next.delete(areaId); else next.add(areaId);
-      return next;
-    });
-  };
 
   const handleDelete = (plantId: string, plantName: string) => {
     Alert.alert("Eliminar planta", `Se eliminará ${plantName} de tu colección.`, [
@@ -133,17 +124,12 @@ export default function CollectionScreen() {
           <>
             {areas.map((area) => {
               const areaPlants = plantsByAreaId.get(area.id) ?? [];
-              const expanded = expandedAreas.has(area.id);
               return (
                 <AreaCard
                   key={area.id}
                   area={area}
                   plants={areaPlants}
-                  expanded={expanded}
-                  onToggle={() => toggleArea(area.id)}
-                  onViewPlant={(p) => router.push(`/(app)/plant/${p.id}`)}
-                  onDeletePlant={(p) => handleDelete(p.id, p.name)}
-                  onEditArea={() => router.push(`/(app)/forms/area?id=${area.id}`)}
+                  onPress={() => setSelectedAreaKey(area.id)}
                   colors={colors}
                   isDark={isDark}
                 />
@@ -153,10 +139,7 @@ export default function CollectionScreen() {
             {unassigned.length > 0 && (
               <UnassignedCard
                 plants={unassigned}
-                expanded={expandedAreas.has("unassigned")}
-                onToggle={() => toggleArea("unassigned")}
-                onViewPlant={(p) => router.push(`/(app)/plant/${p.id}`)}
-                onDeletePlant={(p) => handleDelete(p.id, p.name)}
+                onPress={() => setSelectedAreaKey("unassigned")}
                 colors={colors}
                 isDark={isDark}
               />
@@ -173,6 +156,27 @@ export default function CollectionScreen() {
       >
         <MaterialCommunityIcons name="plus" size={24} color={colors.onPrimary} />
       </Pressable>
+
+      <AreaDetailSheet
+        visible={selectedAreaKey !== null}
+        area={selectedAreaKey ? (areas.find((a) => a.id === selectedAreaKey) ?? null) : null}
+        plants={selectedAreaKey ? (plantsByAreaId.get(selectedAreaKey) ?? []) : []}
+        onClose={() => setSelectedAreaKey(null)}
+        onViewPlant={(p) => {
+          setSelectedAreaKey(null);
+          router.push(`/(app)/plant/${p.id}`);
+        }}
+        onDeletePlant={(p) => handleDelete(p.id, p.name)}
+        onEditArea={
+          selectedAreaKey && selectedAreaKey !== "unassigned"
+            ? () => {
+                const areaId = selectedAreaKey;
+                setSelectedAreaKey(null);
+                router.push(`/(app)/forms/area?id=${areaId}`);
+              }
+            : undefined
+        }
+      />
     </SafeAreaView>
   );
 }
@@ -180,13 +184,10 @@ export default function CollectionScreen() {
 // ─── Area Card (foto grande + grid 3 col de plantas) ────────────────────────
 
 function AreaCard({
-  area, plants, expanded, onToggle, onViewPlant, onDeletePlant, onEditArea, colors, isDark,
+  area, plants, onPress, colors, isDark,
 }: {
   area: AreaDocument; plants: PlantDocument[];
-  expanded: boolean; onToggle: () => void;
-  onViewPlant: (p: PlantDocument) => void;
-  onDeletePlant: (p: PlantDocument) => void;
-  onEditArea: () => void;
+  onPress: () => void;
   colors: ThemeColors; isDark: boolean;
 }) {
   const s = createStyles(colors, isDark);
@@ -196,122 +197,83 @@ function AreaCard({
   }, [plants]);
 
   return (
-    <View style={s.areaCard}>
-      {/* Foto grande del área como hero */}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${expanded ? "Contraer" : "Expandir"} área ${area.name}`}
-        onPress={onToggle}
-        style={({ pressed }) => [pressed && { opacity: 0.92 }]}
-      >
-        <View style={s.areaHero}>
-          {area.photoUri ? (
-            <Image source={{ uri: area.photoUri }} style={s.areaHeroImg} />
-          ) : (
-            <View style={[s.areaHeroImg, s.areaHeroPlaceholder]}>
-              <MaterialCommunityIcons
-                name={TYPE_ICON[area.type] ?? "home"}
-                size={48}
-                color="rgba(255,255,255,0.6)"
-              />
-            </View>
-          )}
-          {/* Gradiente simulado */}
-          <View style={s.areaHeroOverlay} />
-
-          {/* Tipo badge */}
-          <View style={s.areaTypeBadge}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Ver área ${area.name}`}
+      onPress={onPress}
+      style={({ pressed }) => [s.areaCard, pressed && { opacity: 0.92 }]}
+    >
+      <View style={s.areaHero}>
+        {area.photoUri ? (
+          <Image source={{ uri: area.photoUri }} style={s.areaHeroImg} />
+        ) : (
+          <View style={[s.areaHeroImg, s.areaHeroPlaceholder]}>
             <MaterialCommunityIcons
               name={TYPE_ICON[area.type] ?? "home"}
-              size={11}
-              color="#fff"
+              size={48}
+              color="rgba(255,255,255,0.6)"
             />
-            <Text style={s.areaTypeBadgeText}>{area.type}</Text>
           </View>
+        )}
+        {/* Gradiente simulado */}
+        <View style={s.areaHeroOverlay} />
 
-          {/* Contador arriba derecha */}
-          <View style={s.areaCountBadge}>
-            <MaterialCommunityIcons name="leaf" size={11} color="#fff" />
-            <Text style={s.areaCountBadgeText}>
-              {plants.length} {plants.length === 1 ? "planta" : "plantas"}
+        {/* Tipo badge */}
+        <View style={s.areaTypeBadge}>
+          <MaterialCommunityIcons
+            name={TYPE_ICON[area.type] ?? "home"}
+            size={11}
+            color="#fff"
+          />
+          <Text style={s.areaTypeBadgeText}>{area.type}</Text>
+        </View>
+
+        {/* Contador arriba derecha */}
+        <View style={s.areaCountBadge}>
+          <MaterialCommunityIcons name="leaf" size={11} color="#fff" />
+          <Text style={s.areaCountBadgeText}>
+            {plants.length} {plants.length === 1 ? "planta" : "plantas"}
+          </Text>
+        </View>
+
+        {/* Nombre e info abajo */}
+        <View style={s.areaHeroBottom}>
+          <Text style={s.areaHeroName} numberOfLines={1}>{area.name}</Text>
+          <View style={s.areaHeroMeta}>
+            <Text style={s.areaHeroMetaText}>
+              {area.indoor ? "Interior" : "Exterior"}
             </Text>
-          </View>
-
-          {/* Nombre e info abajo */}
-          <View style={s.areaHeroBottom}>
-            <Text style={s.areaHeroName} numberOfLines={1}>{area.name}</Text>
-            <View style={s.areaHeroMeta}>
-              <Text style={s.areaHeroMetaText}>
-                {area.indoor ? "Interior" : "Exterior"}
-              </Text>
-              {healthPct > 0 && (
-                <Text style={s.areaHeroMetaText}>· {healthPct}% con IA</Text>
-              )}
-            </View>
-          </View>
-
-          {/* Chevron */}
-          <View style={s.areaChevron}>
-            <MaterialCommunityIcons
-              name={expanded ? "chevron-up" : "chevron-down"}
-              size={20}
-              color="rgba(255,255,255,0.85)"
-            />
+            {healthPct > 0 && (
+              <Text style={s.areaHeroMetaText}>· {healthPct}% con IA</Text>
+            )}
           </View>
         </View>
-      </Pressable>
 
-      {/* Grid 3 columnas de plantas */}
-      {expanded && (
-        <View style={s.areaPlants}>
-          {plants.length === 0 ? (
-            <Text style={s.areaEmptyText}>Sin plantas asignadas todavía.</Text>
-          ) : (
-            <View style={s.plantGrid}>
-              {plants.map((plant) => (
-                <PlantThumb
-                  key={plant.id}
-                  plant={plant}
-                  onPress={() => onViewPlant(plant)}
-                  onDelete={() => onDeletePlant(plant)}
-                  colors={colors}
-                  isDark={isDark}
-                />
-              ))}
-            </View>
-          )}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Editar área"
-            onPress={onEditArea}
-            style={({ pressed }) => [s.editAreaLink, pressed && { opacity: 0.6 }]}
-          >
-            <MaterialCommunityIcons name="pencil-outline" size={13} color={colors.primary} />
-            <Text style={s.editAreaLinkText}>Editar área</Text>
-          </Pressable>
+        {/* Chevron */}
+        <View style={s.areaChevron}>
+          <MaterialCommunityIcons name="chevron-right" size={20} color="rgba(255,255,255,0.85)" />
         </View>
-      )}
-    </View>
+      </View>
+    </Pressable>
   );
 }
 
 function UnassignedCard({
-  plants, expanded, onToggle, onViewPlant, onDeletePlant, colors, isDark,
+  plants, onPress, colors, isDark,
 }: {
-  plants: PlantDocument[]; expanded: boolean; onToggle: () => void;
-  onViewPlant: (p: PlantDocument) => void;
-  onDeletePlant: (p: PlantDocument) => void;
+  plants: PlantDocument[];
+  onPress: () => void;
   colors: ThemeColors; isDark: boolean;
 }) {
   const s = createStyles(colors, isDark);
   return (
-    <View style={s.areaCard}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${expanded ? "Contraer" : "Expandir"} plantas sin área`}
-        onPress={onToggle}
-        style={({ pressed }) => [s.unassignedHeader, pressed && { opacity: 0.85 }]}
-      >
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Ver plantas sin área"
+      onPress={onPress}
+      style={({ pressed }) => [s.areaCard, pressed && { opacity: 0.85 }]}
+    >
+      <View style={s.unassignedHeader}>
         <View style={[s.unassignedIcon, { backgroundColor: colors.disabled }]}>
           <MaterialCommunityIcons name="help-circle-outline" size={20} color={colors.onPrimary} />
         </View>
@@ -319,104 +281,11 @@ function UnassignedCard({
           <Text style={s.unassignedTitle}>Sin área asignada</Text>
           <Text style={s.unassignedCount}>{plants.length} {plants.length === 1 ? "planta" : "plantas"}</Text>
         </View>
-        <MaterialCommunityIcons
-          name={expanded ? "chevron-up" : "chevron-down"}
-          size={20}
-          color={colors.textSecondary}
-        />
-      </Pressable>
-      {expanded && (
-        <View style={s.areaPlants}>
-          <View style={s.plantGrid}>
-            {plants.map((plant) => (
-              <PlantThumb
-                key={plant.id}
-                plant={plant}
-                onPress={() => onViewPlant(plant)}
-                onDelete={() => onDeletePlant(plant)}
-                colors={colors}
-                isDark={isDark}
-              />
-            ))}
-          </View>
-        </View>
-      )}
-    </View>
-  );
-}
-
-function PlantThumb({
-  plant, onPress, onDelete, colors, isDark,
-}: {
-  plant: PlantDocument; onPress: () => void; onDelete: () => void;
-  colors: ThemeColors; isDark: boolean;
-}) {
-  const { photoUri: catalogPhoto } = usePlantPhoto({ scientificName: plant.scientificName });
-  const photo = plant.photoUri ?? catalogPhoto;
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Ver ${plant.name}`}
-      onPress={onPress}
-      style={({ pressed }) => [thumbStyles.wrap, pressed && { opacity: 0.82 }]}
-    >
-      <View style={thumbStyles.photoWrap}>
-        {photo ? (
-          <Image source={{ uri: photo }} style={thumbStyles.photo} />
-        ) : (
-          <View style={[thumbStyles.photo, { backgroundColor: isDark ? "#143018" : "#DCFCE7", alignItems: "center", justifyContent: "center" }]}>
-            <MaterialCommunityIcons name="leaf" size={22} color={colors.primary} />
-          </View>
-        )}
-        {plant.aiAnalyzed && (
-          <View style={thumbStyles.aiBadge}>
-            <MaterialCommunityIcons name="creation" size={8} color="#fff" />
-          </View>
-        )}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Eliminar ${plant.name}`}
-          onPress={onDelete}
-          hitSlop={6}
-          style={({ pressed }) => [thumbStyles.deleteBtn, pressed && { opacity: 0.7 }]}
-        >
-          <MaterialCommunityIcons name="close" size={10} color="#fff" />
-        </Pressable>
+        <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textSecondary} />
       </View>
-      <Text style={[thumbStyles.name, { color: colors.text }]} numberOfLines={1}>{plant.name}</Text>
     </Pressable>
   );
 }
-
-const thumbStyles = StyleSheet.create({
-  wrap: { width: "31%", gap: 4 },
-  photoWrap: {
-    width: "100%", aspectRatio: 1,
-    borderRadius: BorderRadius.md,
-    overflow: "hidden",
-    position: "relative",
-  },
-  photo: { width: "100%", height: "100%", resizeMode: "cover" },
-  aiBadge: {
-    position: "absolute", top: 3, left: 3,
-    width: 14, height: 14, borderRadius: 7,
-    backgroundColor: "#16A34A",
-    alignItems: "center", justifyContent: "center",
-  },
-  deleteBtn: {
-    position: "absolute", top: 3, right: 3,
-    width: 18, height: 18, borderRadius: 9,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    alignItems: "center", justifyContent: "center",
-  },
-  name: {
-    fontFamily: Typography.family,
-    fontSize: 10,
-    fontWeight: "700",
-    textAlign: "center",
-  },
-});
 
 const createStyles = (colors: ThemeColors, isDark: boolean) =>
   StyleSheet.create({
@@ -518,26 +387,6 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     },
     areaChevron: {
       position: "absolute", bottom: Spacing.md, right: Spacing.md,
-    },
-    areaPlants: {
-      padding: Spacing.md, gap: Spacing.sm,
-      borderTopWidth: 1, borderTopColor: colors.border,
-    },
-    areaEmptyText: {
-      color: colors.textSecondary, fontFamily: Typography.family,
-      fontSize: 13, fontStyle: "italic", textAlign: "center",
-      paddingVertical: Spacing.sm,
-    },
-    plantGrid: {
-      flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm,
-    },
-    editAreaLink: {
-      flexDirection: "row", alignItems: "center", justifyContent: "center",
-      gap: 4, paddingVertical: 4, marginTop: 2,
-    },
-    editAreaLinkText: {
-      color: colors.primary, fontFamily: Typography.family,
-      fontSize: 12, fontWeight: "700",
     },
     // Unassigned
     unassignedHeader: {

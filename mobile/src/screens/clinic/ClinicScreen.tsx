@@ -17,18 +17,21 @@ import {
   Text,
   View,
 } from "react-native";
+import Svg, { Circle, Line as SvgLine, Polyline } from "react-native-svg";
 import { useDemoData } from "@/src/data/DemoDataProvider";
 import DayStrip from "@/src/components/ui/DayStrip";
+import FullscreenImageViewer from "@/src/components/ui/FullscreenImageViewer";
 import DiagnoseService from "@/src/services/diagnoseService";
 import {
   getDiagnosesByPlant,
   saveDiagnose,
   type DiagnoseRecord,
 } from "@/src/services/diagnoseHistoryService";
-import type { DiagnoseIssueCategory } from "@/src/services/diagnoseService";
+import type { DiagnoseHealthStatus, DiagnoseIssueCategory } from "@/src/services/diagnoseService";
 import type { PlantDocument } from "@/src/services/plantService";
 import {
   BorderRadius,
+  getClinicColors,
   Spacing,
   Typography,
   type ThemeColors,
@@ -37,24 +40,25 @@ import { useAppTheme } from "@/src/theme/ThemeProvider";
 
 // ─── Fitopatología: constantes científicas ────────────────────────────────────
 
-const HEALTH_COLOR: Record<string, string> = {
-  saludable: "#16A34A",
-  atencion:  "#D97706",
-  enferma:   "#DC2626",
-  critica:   "#7F1D1D",
-};
-const HEALTH_LABEL: Record<string, string> = {
+const HEALTH_LABEL: Record<DiagnoseHealthStatus, string> = {
   saludable: "Saludable",
   atencion:  "Atención",
   enferma:   "Enferma",
   critica:   "Crítica",
 };
 // Días entre diagnósticos según severidad del último resultado (protocolo fitopatológico)
-const RECHECK_DAYS: Record<string, number> = {
+const RECHECK_DAYS: Record<DiagnoseHealthStatus, number> = {
   saludable: 30,
   atencion:  14,
   enferma:   7,
   critica:   3,
+};
+// Score equivalente por estado de salud, usado para el índice fitosanitario y la tendencia.
+const HEALTH_WEIGHT: Record<DiagnoseHealthStatus, number> = {
+  saludable: 100,
+  atencion:  60,
+  enferma:   25,
+  critica:   0,
 };
 const CATEGORY_ICON: Record<DiagnoseIssueCategory, string> = {
   plaga:        "bug-outline",
@@ -63,16 +67,19 @@ const CATEGORY_ICON: Record<DiagnoseIssueCategory, string> = {
   exceso:       "water-plus-outline",
   ambiental:    "thermometer-alert",
 };
-const CATEGORY_COLOR: Record<DiagnoseIssueCategory, string> = {
-  plaga:        "#DC2626",
-  enfermedad:   "#9333EA",
-  deficiencia:  "#D97706",
-  exceso:       "#0284C7",
-  ambiental:    "#64748B",
-};
 
 const ISO_TODAY = new Date().toISOString().slice(0, 10);
 const CLINIC_DAYS_AHEAD = 14;
+
+// Filtros de la vista "Diagnósticos": recencia global o agrupado por gravedad.
+const DIAG_FILTERS: { key: DiagnoseHealthStatus | "recientes" | "sindatos"; label: string }[] = [
+  { key: "recientes", label: "Recientes" },
+  { key: "critica", label: "Crítica" },
+  { key: "enferma", label: "Enferma" },
+  { key: "atencion", label: "Atención" },
+  { key: "saludable", label: "Saludable" },
+  { key: "sindatos", label: "Sin datos" },
+];
 
 function addDaysIso(isoDate: string, days: number): string {
   const d = new Date(isoDate + "T00:00:00");
@@ -83,7 +90,7 @@ function addDaysIso(isoDate: string, days: number): string {
 // Fecha ISO del próximo diagnóstico recomendado para una planta.
 function nextDiagnoseIso(last: DiagnoseRecord | null): string {
   const base = last ? new Date(last.createdAt) : new Date();
-  const interval = last ? (RECHECK_DAYS[last.healthStatus] ?? 30) : 0;
+  const interval = last ? RECHECK_DAYS[last.healthStatus] : 0;
   const next = new Date(base);
   next.setDate(next.getDate() + interval);
   return next.toISOString().slice(0, 10);
@@ -92,7 +99,7 @@ function nextDiagnoseIso(last: DiagnoseRecord | null): string {
 // Calcula días hasta el próximo diagnóstico recomendado
 function nextDiagnoseDate(last: DiagnoseRecord | null): { date: string; daysLeft: number } {
   const base = last ? new Date(last.createdAt) : new Date();
-  const interval = last ? (RECHECK_DAYS[last.healthStatus] ?? 30) : 0;
+  const interval = last ? RECHECK_DAYS[last.healthStatus] : 0;
   const next = new Date(base);
   next.setDate(next.getDate() + interval);
   const today = new Date();
@@ -108,8 +115,7 @@ function nextDiagnoseDate(last: DiagnoseRecord | null): { date: string; daysLeft
 // Score de salud 0-100 basado en historial
 function healthScore(history: DiagnoseRecord[]): number {
   if (history.length === 0) return 0;
-  const weights: Record<string, number> = { saludable: 100, atencion: 60, enferma: 25, critica: 0 };
-  const sum = history.reduce((acc, r) => acc + (weights[r.healthStatus] ?? 50), 0);
+  const sum = history.reduce((acc, r) => acc + HEALTH_WEIGHT[r.healthStatus], 0);
   return Math.round(sum / history.length);
 }
 
@@ -155,14 +161,15 @@ const pulseStyles = StyleSheet.create({
 // ─── CountdownBadge ────────────────────────────────────────────────────────────
 
 function CountdownBadge({ daysLeft, colors, isDark }: { daysLeft: number; colors: ThemeColors; isDark: boolean }) {
+  const clinicColors = getClinicColors(isDark ? "dark" : "light");
   const urgent = daysLeft <= 0;
   const soon = daysLeft <= 3 && daysLeft > 0;
-  const bg = urgent ? "#DC2626" : soon ? "#D97706" : (isDark ? "#143018" : "#DCFCE7");
-  const fg = urgent || soon ? "#fff" : colors.primary;
-  const label = urgent ? "HOY" : soon ? `${daysLeft}d` : `${daysLeft}d`;
+  const tone = urgent ? clinicColors.health.critica : soon ? clinicColors.health.atencion : clinicColors.health.saludable;
+  const bg = urgent || soon ? tone : tone + "1F";
+  const fg = urgent || soon ? colors.onPrimary : tone;
   return (
     <View style={[cntStyles.badge, { backgroundColor: bg }]}>
-      <Text style={[cntStyles.text, { color: fg }]}>{label}</Text>
+      <Text style={[cntStyles.text, { color: fg }]}>{urgent ? "HOY" : `${daysLeft}d`}</Text>
     </View>
   );
 }
@@ -182,8 +189,9 @@ function PlantCard({
   colors: ThemeColors;
   isDark: boolean;
 }) {
-  const color = lastDiagnose ? (HEALTH_COLOR[lastDiagnose.healthStatus] ?? colors.textSecondary) : colors.disabled;
-  const label = lastDiagnose ? (HEALTH_LABEL[lastDiagnose.healthStatus] ?? "") : null;
+  const clinicColors = getClinicColors(isDark ? "dark" : "light");
+  const color = lastDiagnose ? clinicColors.health[lastDiagnose.healthStatus] : colors.disabled;
+  const label = lastDiagnose ? HEALTH_LABEL[lastDiagnose.healthStatus] : null;
   const { daysLeft, date } = nextDiagnoseDate(lastDiagnose);
   const urgent = daysLeft <= 0;
 
@@ -192,7 +200,7 @@ function PlantCard({
       onPress={onPress}
       style={({ pressed }) => [
         pcStyles.wrap,
-        { backgroundColor: colors.surfaceCard, borderColor: urgent ? "#DC262644" : colors.border },
+        { backgroundColor: colors.surfaceCard, borderColor: urgent ? clinicColors.health.critica + "44" : colors.border },
         pressed && { opacity: 0.85 },
       ]}
     >
@@ -243,12 +251,73 @@ const pcStyles = StyleSheet.create({
   nextDate: { fontFamily: Typography.family, fontSize: 10, fontWeight: "500" },
 });
 
+// ─── RecentDiagnosisCard — un diagnóstico puntual del registro global ──────────
+
+function RecentDiagnosisCard({
+  record, plant, onPress, colors, isDark,
+}: {
+  record: DiagnoseRecord;
+  plant: PlantDocument;
+  onPress: () => void;
+  colors: ThemeColors;
+  isDark: boolean;
+}) {
+  const clinicColors = getClinicColors(isDark ? "dark" : "light");
+  const color = clinicColors.health[record.healthStatus];
+  const photo = record.photoUri ?? plant.photoUri;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        rdStyles.wrap,
+        { backgroundColor: colors.surfaceCard, borderColor: colors.border },
+        pressed && { opacity: 0.85 },
+      ]}
+    >
+      {photo ? (
+        <Image source={{ uri: photo }} style={rdStyles.photo} />
+      ) : (
+        <View style={[rdStyles.photo, { backgroundColor: isDark ? "#143018" : "#DCFCE7", alignItems: "center", justifyContent: "center" }]}>
+          <MaterialCommunityIcons name="leaf" size={20} color={colors.primary} />
+        </View>
+      )}
+
+      <View style={rdStyles.info}>
+        <View style={rdStyles.row}>
+          <Text style={[rdStyles.name, { color: colors.text }]} numberOfLines={1}>{plant.name}</Text>
+          <View style={[rdStyles.pill, { backgroundColor: color + "22" }]}>
+            <Text style={[rdStyles.pillText, { color }]}>{HEALTH_LABEL[record.healthStatus]}</Text>
+          </View>
+        </View>
+        <Text style={[rdStyles.summary, { color: colors.textSecondary }]} numberOfLines={2}>{record.healthSummary}</Text>
+        <Text style={[rdStyles.date, { color: colors.textSecondary }]}>{formatDate(record.createdAt)}</Text>
+      </View>
+
+      <MaterialCommunityIcons name="chevron-right" size={16} color={colors.disabled} />
+    </Pressable>
+  );
+}
+
+const rdStyles = StyleSheet.create({
+  wrap: { flexDirection: "row", alignItems: "center", gap: Spacing.md, padding: Spacing.md, borderRadius: BorderRadius.lg, borderWidth: 1 },
+  photo: { width: 48, height: 48, borderRadius: BorderRadius.md, resizeMode: "cover" },
+  info: { flex: 1, gap: 3 },
+  row: { flexDirection: "row", alignItems: "center", gap: 6 },
+  name: { fontFamily: Typography.family, fontSize: 14, fontWeight: "800", flexShrink: 1 },
+  pill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: BorderRadius.full },
+  pillText: { fontFamily: Typography.family, fontSize: 10, fontWeight: "700" },
+  summary: { fontFamily: Typography.family, fontSize: 11, lineHeight: 15 },
+  date: { fontFamily: Typography.family, fontSize: 10, fontWeight: "600" },
+});
+
 // ─── DiagnoseEntry (timeline) ──────────────────────────────────────────────────
 
 function DiagnoseEntry({ record, colors, isDark, isLast }: { record: DiagnoseRecord; colors: ThemeColors; isDark: boolean; isLast: boolean }) {
   const [expanded, setExpanded] = useState(false);
-  const color = HEALTH_COLOR[record.healthStatus] ?? colors.textSecondary;
-  const label = HEALTH_LABEL[record.healthStatus] ?? record.healthStatus;
+  const clinicColors = getClinicColors(isDark ? "dark" : "light");
+  const color = clinicColors.health[record.healthStatus];
+  const label = HEALTH_LABEL[record.healthStatus];
 
   return (
     <View style={deStyles.row}>
@@ -263,7 +332,10 @@ function DiagnoseEntry({ record, colors, isDark, isLast }: { record: DiagnoseRec
         style={[deStyles.card, { backgroundColor: colors.surfaceCard, borderColor: color + "44" }]}
       >
         <View style={deStyles.cardHeader}>
-          <View style={[deStyles.pill, { backgroundColor: color + "22" }]}>
+          {record.photoUri ? (
+            <Image source={{ uri: record.photoUri }} style={deStyles.thumb} />
+          ) : null}
+          <View style={[deStyles.pill, { backgroundColor: color + "1F" }]}>
             <Text style={[deStyles.pillText, { color }]}>{label}</Text>
           </View>
           <Text style={[deStyles.date, { color: colors.textSecondary }]}>{formatDate(record.createdAt)}</Text>
@@ -278,9 +350,9 @@ function DiagnoseEntry({ record, colors, isDark, isLast }: { record: DiagnoseRec
         {record.issues.length > 0 && (
           <View style={deStyles.issuesRow}>
             {record.issues.slice(0, expanded ? 99 : 3).map((issue, i) => (
-              <View key={i} style={[deStyles.issuePill, { backgroundColor: (CATEGORY_COLOR[issue.category] ?? "#888") + "22" }]}>
-                <MaterialCommunityIcons name={CATEGORY_ICON[issue.category] as never ?? "alert"} size={9} color={CATEGORY_COLOR[issue.category] ?? "#888"} />
-                <Text style={[deStyles.issueText, { color: CATEGORY_COLOR[issue.category] ?? "#888" }]}>{issue.name}</Text>
+              <View key={i} style={[deStyles.issuePill, { backgroundColor: clinicColors.category[issue.category] + "1F" }]}>
+                <MaterialCommunityIcons name={CATEGORY_ICON[issue.category] as never} size={9} color={clinicColors.category[issue.category]} />
+                <Text style={[deStyles.issueText, { color: clinicColors.category[issue.category] }]}>{issue.name}</Text>
               </View>
             ))}
           </View>
@@ -305,9 +377,9 @@ function DiagnoseEntry({ record, colors, isDark, isLast }: { record: DiagnoseRec
               </View>
             )}
             {record.estimatedRecovery && (
-              <View style={[deStyles.recoveryWrap, { backgroundColor: isDark ? "#0F2318" : "#F0FDF4", borderColor: "#BBF7D0" }]}>
-                <MaterialCommunityIcons name="timer-outline" size={13} color="#16A34A" />
-                <Text style={[deStyles.recoveryText, { color: "#16A34A" }]}>Recuperación: {record.estimatedRecovery}</Text>
+              <View style={[deStyles.recoveryWrap, { backgroundColor: clinicColors.health.saludable + "14", borderColor: clinicColors.health.saludable + "55" }]}>
+                <MaterialCommunityIcons name="timer-outline" size={13} color={clinicColors.health.saludable} />
+                <Text style={[deStyles.recoveryText, { color: clinicColors.health.saludable }]}>Recuperación: {record.estimatedRecovery}</Text>
               </View>
             )}
           </>
@@ -324,6 +396,7 @@ const deStyles = StyleSheet.create({
   line: { flex: 1, width: 2, marginTop: 4 },
   card: { flex: 1, borderRadius: BorderRadius.lg, borderWidth: 1, padding: Spacing.md, gap: 6, marginBottom: Spacing.sm },
   cardHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
+  thumb: { width: 36, height: 36, borderRadius: BorderRadius.sm, resizeMode: "cover" },
   pill: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: BorderRadius.full },
   pillText: { fontFamily: Typography.family, fontSize: 10, fontWeight: "800" },
   date: { fontFamily: Typography.family, fontSize: 10, fontWeight: "500", flex: 1 },
@@ -345,21 +418,22 @@ function PathologyReport({ history, colors, isDark }: { history: DiagnoseRecord[
   const entries = Object.entries(counts) as [DiagnoseIssueCategory, number][];
   if (entries.length === 0) return null;
   entries.sort((a, b) => b[1] - a[1]);
+  const clinicColors = getClinicColors(isDark ? "dark" : "light");
 
   return (
-    <View style={[prStyles.wrap, { backgroundColor: isDark ? "#0A0A0A" : "#F8F8F8", borderColor: colors.border }]}>
+    <View style={[prStyles.wrap, { backgroundColor: colors.surfaceCard, borderColor: colors.border }]}>
       <View style={prStyles.header}>
         <MaterialCommunityIcons name="microscope" size={13} color={colors.textSecondary} />
         <Text style={[prStyles.title, { color: colors.textSecondary }]}>REPORTE FITOPATOLÓGICO</Text>
       </View>
       {entries.map(([cat, count]) => (
         <View key={cat} style={prStyles.row}>
-          <MaterialCommunityIcons name={CATEGORY_ICON[cat] as never} size={14} color={CATEGORY_COLOR[cat]} />
+          <MaterialCommunityIcons name={CATEGORY_ICON[cat] as never} size={14} color={clinicColors.category[cat]} />
           <Text style={[prStyles.catLabel, { color: colors.text }]}>{cat.charAt(0).toUpperCase() + cat.slice(1)}</Text>
           <View style={prStyles.barTrack}>
-            <View style={[prStyles.barFill, { width: `${Math.min((count / history.length) * 100, 100)}%` as never, backgroundColor: CATEGORY_COLOR[cat] }]} />
+            <View style={[prStyles.barFill, { width: `${Math.min((count / history.length) * 100, 100)}%` as never, backgroundColor: clinicColors.category[cat] }]} />
           </View>
-          <Text style={[prStyles.count, { color: CATEGORY_COLOR[cat] }]}>{count}×</Text>
+          <Text style={[prStyles.count, { color: clinicColors.category[cat] }]}>{count}×</Text>
         </View>
       ))}
     </View>
@@ -377,35 +451,147 @@ const prStyles = StyleSheet.create({
   count: { fontFamily: Typography.family, fontSize: 11, fontWeight: "800", width: 28, textAlign: "right" },
 });
 
+// ─── PhotoTimeline — registro fotográfico cronológico (time-lapse) ───────────
+
+function PhotoTimeline({ history, colors, isDark }: { history: DiagnoseRecord[]; colors: ThemeColors; isDark: boolean }) {
+  const clinicColors = getClinicColors(isDark ? "dark" : "light");
+  const points = useMemo(
+    () => [...history].reverse().filter((r) => !!r.photoUri),
+    [history],
+  );
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  if (points.length === 0) return null;
+
+  const viewerImages = points.map((r) => ({
+    uri: r.photoUri!,
+    caption: formatShortDate(r.createdAt),
+  }));
+
+  return (
+    <View style={ptStyles.wrap}>
+      <Text style={[ptStyles.title, { color: colors.textSecondary }]}>REGISTRO FOTOGRÁFICO</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={ptStyles.row}>
+        {points.map((r, i) => (
+          <Pressable
+            key={r.id}
+            style={ptStyles.item}
+            accessibilityRole="button"
+            accessibilityLabel={`Ver foto del ${formatShortDate(r.createdAt)}`}
+            onPress={() => setViewerIndex(i)}
+          >
+            <View style={ptStyles.photoWrap}>
+              <Image source={{ uri: r.photoUri! }} style={ptStyles.photo} />
+              <View style={[ptStyles.dot, { backgroundColor: clinicColors.health[r.healthStatus], borderColor: colors.surfaceCard }]} />
+            </View>
+            <Text style={[ptStyles.date, { color: colors.textSecondary }]}>{formatShortDate(r.createdAt)}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+
+      <FullscreenImageViewer
+        visible={viewerIndex !== null}
+        images={viewerImages}
+        initialIndex={viewerIndex ?? 0}
+        onClose={() => setViewerIndex(null)}
+      />
+    </View>
+  );
+}
+
+const ptStyles = StyleSheet.create({
+  wrap: { gap: Spacing.sm },
+  title: { fontFamily: Typography.family, fontSize: 10, fontWeight: "700", letterSpacing: 0.6 },
+  row: { gap: Spacing.sm },
+  item: { width: 132, gap: 4, alignItems: "center" },
+  photoWrap: { width: 132, height: 176, borderRadius: BorderRadius.md, overflow: "hidden", position: "relative" },
+  photo: { width: "100%", height: "100%", resizeMode: "cover" },
+  dot: { position: "absolute", top: 6, right: 6, width: 10, height: 10, borderRadius: 5, borderWidth: 1.5 },
+  date: { fontFamily: Typography.family, fontSize: 10, fontWeight: "600" },
+});
+
+// ─── HealthTrendChart — evolución del índice fitosanitario ───────────────────
+
+function HealthTrendChart({ history, colors, isDark }: { history: DiagnoseRecord[]; colors: ThemeColors; isDark: boolean }) {
+  const clinicColors = getClinicColors(isDark ? "dark" : "light");
+  const points = useMemo(() => [...history].reverse(), [history]);
+  const [width, setWidth] = useState(0);
+  if (points.length < 2) return null;
+
+  const height = 120;
+  const padding = 16;
+  const innerW = Math.max(width - padding * 2, 1);
+  const stepX = innerW / (points.length - 1);
+  const valueToY = (v: number) => padding + (1 - v / 100) * (height - padding * 2);
+
+  const coords = points.map((r, i) => ({
+    x: padding + i * stepX,
+    y: valueToY(HEALTH_WEIGHT[r.healthStatus]),
+    color: clinicColors.health[r.healthStatus],
+  }));
+  const polylinePoints = coords.map((c) => `${c.x},${c.y}`).join(" ");
+
+  return (
+    <View
+      style={[htStyles.wrap, { backgroundColor: colors.surfaceCard, borderColor: colors.border }]}
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+    >
+      <Text style={[htStyles.title, { color: colors.textSecondary }]}>EVOLUCIÓN DEL ÍNDICE FITOSANITARIO</Text>
+      {width > 0 && (
+        <Svg width={width} height={height}>
+          <SvgLine x1={padding} x2={width - padding} y1={valueToY(100)} y2={valueToY(100)} stroke={colors.border} strokeWidth={1} />
+          <SvgLine x1={padding} x2={width - padding} y1={valueToY(0)} y2={valueToY(0)} stroke={colors.border} strokeWidth={1} />
+          <Polyline points={polylinePoints} fill="none" stroke={colors.primary} strokeWidth={2} />
+          {coords.map((c, i) => (
+            <Circle key={i} cx={c.x} cy={c.y} r={4} fill={c.color} stroke={colors.surfaceCard} strokeWidth={1.5} />
+          ))}
+        </Svg>
+      )}
+      <View style={htStyles.legendRow}>
+        <Text style={[htStyles.legendText, { color: colors.textSecondary }]}>{formatShortDate(points[0].createdAt)}</Text>
+        <Text style={[htStyles.legendText, { color: colors.textSecondary }]}>{formatShortDate(points[points.length - 1].createdAt)}</Text>
+      </View>
+    </View>
+  );
+}
+
+const htStyles = StyleSheet.create({
+  wrap: { borderRadius: BorderRadius.lg, borderWidth: 1, padding: Spacing.md, gap: Spacing.sm },
+  title: { fontFamily: Typography.family, fontSize: 10, fontWeight: "700", letterSpacing: 0.6 },
+  legendRow: { flexDirection: "row", justifyContent: "space-between" },
+  legendText: { fontFamily: Typography.family, fontSize: 10, fontWeight: "600" },
+});
+
 // ─── PlantClinicModal ──────────────────────────────────────────────────────────
 
 function PlantClinicModal({
-  plant, visible, onClose, colors, isDark,
+  plant, visible, onClose, colors, isDark, initialTab,
 }: {
   plant: PlantDocument | null;
   visible: boolean;
   onClose: () => void;
   colors: ThemeColors;
   isDark: boolean;
+  initialTab?: "estado" | "historial" | "reporte" | "progreso";
 }) {
   const [history, setHistory] = useState<DiagnoseRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [diagnosing, setDiagnosing] = useState(false);
-  const [tab, setTab] = useState<"estado" | "historial" | "reporte">("estado");
+  const [tab, setTab] = useState<"estado" | "historial" | "reporte" | "progreso">("estado");
+  const clinicColors = getClinicColors(isDark ? "dark" : "light");
 
   useEffect(() => {
     if (!plant || !visible) return;
-    setTab("estado");
+    setTab(initialTab ?? "estado");
     setLoading(true);
     getDiagnosesByPlant(plant.id)
       .then(setHistory)
       .catch(() => setHistory([]))
       .finally(() => setLoading(false));
-  }, [plant?.id, visible]);
+  }, [plant?.id, visible, initialTab]);
 
   const last = history[0] ?? null;
   const score = healthScore(history);
-  const scoreColor = score >= 75 ? HEALTH_COLOR.saludable : score >= 45 ? HEALTH_COLOR.atencion : HEALTH_COLOR.enferma;
+  const scoreColor = score >= 75 ? clinicColors.health.saludable : score >= 45 ? clinicColors.health.atencion : clinicColors.health.enferma;
   const { daysLeft, date: nextDate } = nextDiagnoseDate(last);
 
   const runDiagnose = useCallback(async (photoUri: string) => {
@@ -467,17 +653,17 @@ function PlantClinicModal({
           <Pressable
             onPress={handleNewDiagnose}
             disabled={diagnosing}
-            style={({ pressed }) => [mStyles.scanBtn, { backgroundColor: diagnosing ? colors.disabled : "#D97706" }, pressed && { opacity: 0.8 }]}
+            style={({ pressed }) => [mStyles.scanBtn, { backgroundColor: diagnosing ? colors.disabled : colors.primary }, pressed && { opacity: 0.8 }]}
           >
             {diagnosing
-              ? <ActivityIndicator size="small" color="#fff" />
-              : <><MaterialCommunityIcons name="stethoscope" size={15} color="#fff" /><Text style={mStyles.scanBtnText}>Analizar</Text></>
+              ? <ActivityIndicator size="small" color={colors.onPrimary} />
+              : <><MaterialCommunityIcons name="stethoscope" size={15} color={colors.onPrimary} /><Text style={[mStyles.scanBtnText, { color: colors.onPrimary }]}>Analizar</Text></>
             }
           </Pressable>
         </View>
 
         {/* Score hero */}
-        <View style={[mStyles.scoreHero, { backgroundColor: isDark ? "#0D1A0D" : "#F0FDF4" }]}>
+        <View style={[mStyles.scoreHero, { backgroundColor: colors.surfaceCard, borderColor: scoreColor + "33" }]}>
           <View style={mStyles.scoreLeft}>
             <Text style={[mStyles.scoreNum, { color: scoreColor, fontVariant: ["tabular-nums"] }]}>{score}</Text>
             <Text style={[mStyles.scoreLabel, { color: colors.textSecondary }]}>ÍNDICE FITOSANITARIO</Text>
@@ -491,9 +677,9 @@ function PlantClinicModal({
               <Text style={[mStyles.scoreStatVal, { color: colors.text }]}>{history.length}</Text>
             </View>
             <View style={mStyles.scoreStatRow}>
-              <MaterialCommunityIcons name="timer-outline" size={14} color={daysLeft <= 0 ? "#DC2626" : daysLeft <= 3 ? "#D97706" : colors.primary} />
+              <MaterialCommunityIcons name="timer-outline" size={14} color={daysLeft <= 0 ? clinicColors.health.critica : daysLeft <= 3 ? clinicColors.health.atencion : colors.primary} />
               <Text style={[mStyles.scoreStatLabel, { color: colors.textSecondary }]}>Próximo</Text>
-              <Text style={[mStyles.scoreStatVal, { color: daysLeft <= 0 ? "#DC2626" : colors.text }]}>
+              <Text style={[mStyles.scoreStatVal, { color: daysLeft <= 0 ? clinicColors.health.critica : colors.text }]}>
                 {daysLeft <= 0 ? "HOY" : `${daysLeft}d — ${nextDate}`}
               </Text>
             </View>
@@ -509,10 +695,10 @@ function PlantClinicModal({
 
         {/* Tabs */}
         <View style={[mStyles.tabRow, { borderBottomColor: colors.border }]}>
-          {(["estado", "historial", "reporte"] as const).map((t) => (
+          {(["estado", "historial", "reporte", "progreso"] as const).map((t) => (
             <Pressable key={t} onPress={() => setTab(t)} style={mStyles.tabItem}>
               <Text style={[mStyles.tabText, { color: tab === t ? colors.primary : colors.textSecondary }]}>
-                {t === "estado" ? "Estado" : t === "historial" ? "Historial" : "Reporte"}
+                {t === "estado" ? "Estado" : t === "historial" ? "Historial" : t === "reporte" ? "Reporte" : "Progreso"}
               </Text>
               {tab === t && <View style={[mStyles.tabIndicator, { backgroundColor: colors.primary }]} />}
             </Pressable>
@@ -540,22 +726,29 @@ function PlantClinicModal({
                 ) : (
                   <>
                     {/* Estado actual */}
-                    <View style={[mStyles.stateCard, { backgroundColor: colors.surfaceCard, borderColor: (HEALTH_COLOR[last.healthStatus] ?? colors.border) + "55" }]}>
+                    <View style={[mStyles.stateCard, { backgroundColor: colors.surfaceCard, borderColor: clinicColors.health[last.healthStatus] + "55" }]}>
                       <View style={mStyles.stateCardHeader}>
-                        <View style={[mStyles.statePill, { backgroundColor: (HEALTH_COLOR[last.healthStatus] ?? "#888") + "22" }]}>
-                          <Text style={[mStyles.statePillText, { color: HEALTH_COLOR[last.healthStatus] ?? "#888" }]}>
-                            {HEALTH_LABEL[last.healthStatus] ?? last.healthStatus}
-                          </Text>
+                        {last.photoUri ? (
+                          <Image source={{ uri: last.photoUri }} style={mStyles.statePhoto} />
+                        ) : null}
+                        <View style={mStyles.stateCardHeaderText}>
+                          <View style={mStyles.stateCardHeaderRow}>
+                            <View style={[mStyles.statePill, { backgroundColor: clinicColors.health[last.healthStatus] + "1F" }]}>
+                              <Text style={[mStyles.statePillText, { color: clinicColors.health[last.healthStatus] }]}>
+                                {HEALTH_LABEL[last.healthStatus]}
+                              </Text>
+                            </View>
+                            <Text style={[mStyles.stateDate, { color: colors.textSecondary }]}>{formatDate(last.createdAt)}</Text>
+                          </View>
                         </View>
-                        <Text style={[mStyles.stateDate, { color: colors.textSecondary }]}>{formatDate(last.createdAt)}</Text>
                       </View>
                       <Text style={[mStyles.stateSummary, { color: colors.text }]}>{last.healthSummary}</Text>
                       {last.issues.length > 0 && (
                         <View style={mStyles.issuesWrap}>
                           {last.issues.map((issue, i) => (
-                            <View key={i} style={[mStyles.issuePill, { backgroundColor: (CATEGORY_COLOR[issue.category] ?? "#888") + "18" }]}>
-                              <MaterialCommunityIcons name={CATEGORY_ICON[issue.category] as never} size={10} color={CATEGORY_COLOR[issue.category] ?? "#888"} />
-                              <Text style={[mStyles.issueText, { color: CATEGORY_COLOR[issue.category] ?? "#888" }]}>{issue.name}</Text>
+                            <View key={i} style={[mStyles.issuePill, { backgroundColor: clinicColors.category[issue.category] + "18" }]}>
+                              <MaterialCommunityIcons name={CATEGORY_ICON[issue.category] as never} size={10} color={clinicColors.category[issue.category]} />
+                              <Text style={[mStyles.issueText, { color: clinicColors.category[issue.category] }]}>{issue.name}</Text>
                             </View>
                           ))}
                         </View>
@@ -569,9 +762,9 @@ function PlantClinicModal({
                         </View>
                       )}
                       {last.estimatedRecovery && (
-                        <View style={[mStyles.recoveryRow, { backgroundColor: isDark ? "#0F2318" : "#F0FDF4", borderColor: "#BBF7D0" }]}>
-                          <MaterialCommunityIcons name="timer-outline" size={13} color="#16A34A" />
-                          <Text style={mStyles.recoveryText}>Recuperación estimada: {last.estimatedRecovery}</Text>
+                        <View style={[mStyles.recoveryRow, { backgroundColor: clinicColors.health.saludable + "14", borderColor: clinicColors.health.saludable + "55" }]}>
+                          <MaterialCommunityIcons name="timer-outline" size={13} color={clinicColors.health.saludable} />
+                          <Text style={[mStyles.recoveryText, { color: clinicColors.health.saludable }]}>Recuperación estimada: {last.estimatedRecovery}</Text>
                         </View>
                       )}
                     </View>
@@ -584,7 +777,7 @@ function PlantClinicModal({
                       </View>
                       {[1, 2, 3].map((i) => {
                         const base = new Date(last.createdAt);
-                        const interval = RECHECK_DAYS[last.healthStatus] ?? 30;
+                        const interval = RECHECK_DAYS[last.healthStatus];
                         base.setDate(base.getDate() + interval * i);
                         const dayStr = base.toLocaleDateString("es-CR", { weekday: "short", day: "numeric", month: "short" });
                         const today = new Date(); today.setHours(0,0,0,0); base.setHours(0,0,0,0);
@@ -595,14 +788,14 @@ function PlantClinicModal({
                               <Text style={[mStyles.scheduleIndexText, { color: colors.primary }]}>#{i}</Text>
                             </View>
                             <Text style={[mStyles.scheduleDate, { color: colors.text }]}>{dayStr}</Text>
-                            <Text style={[mStyles.scheduleDays, { color: days <= 0 ? "#DC2626" : days <= 3 ? "#D97706" : colors.textSecondary }]}>
+                            <Text style={[mStyles.scheduleDays, { color: days <= 0 ? clinicColors.health.critica : days <= 3 ? clinicColors.health.atencion : colors.textSecondary }]}>
                               {days <= 0 ? "vencido" : `en ${days}d`}
                             </Text>
                           </View>
                         );
                       })}
                       <Text style={[mStyles.scheduleNote, { color: colors.textSecondary }]}>
-                        Frecuencia basada en protocolo fitopatológico: cada {RECHECK_DAYS[last.healthStatus] ?? 30} días para estado {HEALTH_LABEL[last.healthStatus]?.toLowerCase()}.
+                        Frecuencia basada en protocolo fitopatológico: cada {RECHECK_DAYS[last.healthStatus]} días para estado {HEALTH_LABEL[last.healthStatus].toLowerCase()}.
                       </Text>
                     </View>
                   </>
@@ -638,6 +831,24 @@ function PlantClinicModal({
               </>
             )}
 
+            {/* ── Tab: Progreso ── */}
+            {tab === "progreso" && (
+              history.filter((r) => !!r.photoUri).length === 0 && history.length < 2 ? (
+                <View style={mStyles.emptyState}>
+                  <MaterialCommunityIcons name="image-multiple-outline" size={48} color={colors.textSecondary} />
+                  <Text style={[mStyles.emptyTitle, { color: colors.text }]}>Aún no hay progreso para mostrar</Text>
+                  <Text style={[mStyles.emptyBody, { color: colors.textSecondary }]}>
+                    A medida que hagas más diagnósticos con fotos, vas a poder ver acá la evolución de la planta.
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <PhotoTimeline history={history} colors={colors} isDark={isDark} />
+                  <HealthTrendChart history={history} colors={colors} isDark={isDark} />
+                </>
+              )
+            )}
+
           </ScrollView>
         )}
       </SafeAreaView>
@@ -671,6 +882,9 @@ const mStyles = StyleSheet.create({
   emptyBody: { fontFamily: Typography.family, fontSize: 13, textAlign: "center", lineHeight: 20, maxWidth: 260 },
   stateCard: { borderRadius: BorderRadius.lg, borderWidth: 1, padding: Spacing.lg, gap: Spacing.sm },
   stateCardHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  statePhoto: { width: 56, height: 56, borderRadius: BorderRadius.md, resizeMode: "cover" },
+  stateCardHeaderText: { flex: 1, gap: 4 },
+  stateCardHeaderRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   statePill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: BorderRadius.full },
   statePillText: { fontFamily: Typography.family, fontSize: 12, fontWeight: "800" },
   stateDate: { fontFamily: Typography.family, fontSize: 11, fontWeight: "500" },
@@ -681,7 +895,7 @@ const mStyles = StyleSheet.create({
   secLabel: { fontFamily: Typography.family, fontSize: 9, fontWeight: "700", letterSpacing: 0.7, textTransform: "uppercase" },
   actionText: { fontFamily: Typography.family, fontSize: 12, lineHeight: 18 },
   recoveryRow: { flexDirection: "row", alignItems: "center", gap: 5, padding: Spacing.sm, borderRadius: BorderRadius.md, borderWidth: 1, marginTop: 2 },
-  recoveryText: { fontFamily: Typography.family, fontSize: 11, fontWeight: "700", color: "#16A34A" },
+  recoveryText: { fontFamily: Typography.family, fontSize: 11, fontWeight: "700" },
   scheduleCard: { borderRadius: BorderRadius.lg, borderWidth: 1, padding: Spacing.md, gap: Spacing.sm },
   scheduleHeader: { flexDirection: "row", alignItems: "center", gap: 5 },
   scheduleRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
@@ -700,13 +914,18 @@ export default function ClinicScreen() {
   const { colors, isDark } = useAppTheme();
   const { getPlantsByUser, currentUserId } = useDemoData();
   const styles = createStyles(colors, isDark);
+  const clinicColors = getClinicColors(isDark ? "dark" : "light");
 
   const userPlants = getPlantsByUser(currentUserId);
   const openedFromParam = useRef(false);
   const [lastDiagnoses, setLastDiagnoses] = useState<Record<string, DiagnoseRecord | null>>({});
+  const [historyByPlant, setHistoryByPlant] = useState<Record<string, DiagnoseRecord[]>>({});
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [selectedPlant, setSelectedPlant] = useState<PlantDocument | null>(null);
+  const [selectedInitialTab, setSelectedInitialTab] = useState<"estado" | "historial">("estado");
   const [selectedDate, setSelectedDate] = useState<string>(ISO_TODAY);
+  const [viewMode, setViewMode] = useState<"agenda" | "diagnosticos">("agenda");
+  const [diagFilter, setDiagFilter] = useState<DiagnoseHealthStatus | "recientes" | "sindatos">("recientes");
 
   const days = useMemo(() => {
     const arr: string[] = [];
@@ -721,18 +940,50 @@ export default function ClinicScreen() {
       userPlants.map(async (p) => {
         try {
           const records = await getDiagnosesByPlant(p.id);
-          return { id: p.id, last: records[0] ?? null };
-        } catch { return { id: p.id, last: null }; }
+          return { id: p.id, records };
+        } catch { return { id: p.id, records: [] as DiagnoseRecord[] }; }
       })
     ).then((results) => {
       if (cancelled) return;
-      const map: Record<string, DiagnoseRecord | null> = {};
-      results.forEach((r) => { map[r.id] = r.last; });
-      setLastDiagnoses(map);
+      const histMap: Record<string, DiagnoseRecord[]> = {};
+      const lastMap: Record<string, DiagnoseRecord | null> = {};
+      results.forEach((r) => {
+        histMap[r.id] = r.records;
+        lastMap[r.id] = r.records[0] ?? null;
+      });
+      setHistoryByPlant(histMap);
+      setLastDiagnoses(lastMap);
       setLoadingHistory(false);
     });
     return () => { cancelled = true; };
   }, [userPlants.length]);
+
+  // Diagnósticos más recientes de toda la colección, sin importar la planta.
+  const recentDiagnoses = useMemo(() => {
+    const plantById = new Map(userPlants.map((p) => [p.id, p]));
+    const all: { record: DiagnoseRecord; plant: PlantDocument }[] = [];
+    Object.entries(historyByPlant).forEach(([plantId, records]) => {
+      const plant = plantById.get(plantId);
+      if (!plant) return;
+      records.forEach((record) => all.push({ record, plant }));
+    });
+    return all
+      .sort((a, b) => b.record.createdAt.localeCompare(a.record.createdAt))
+      .slice(0, 30);
+  }, [historyByPlant, userPlants]);
+
+  // Plantas agrupadas por su estado de salud más reciente, para control por gravedad.
+  const plantsByStatus = useMemo(() => {
+    const groups: Record<DiagnoseHealthStatus | "sindatos", PlantDocument[]> = {
+      saludable: [], atencion: [], enferma: [], critica: [], sindatos: [],
+    };
+    userPlants.forEach((p) => {
+      const status = lastDiagnoses[p.id]?.healthStatus;
+      if (status) groups[status].push(p);
+      else groups.sindatos.push(p);
+    });
+    return groups;
+  }, [userPlants, lastDiagnoses]);
 
   // Si venimos del detalle de una planta (?plantId=), abrimos su clínica directo.
   useEffect(() => {
@@ -812,28 +1063,69 @@ export default function ClinicScreen() {
           <Text style={styles.headerSub}>Diagnóstico de salud vegetal</Text>
         </View>
         {urgent > 0 && (
-          <View style={[styles.urgentBadge, { backgroundColor: "#DC2626" }]}>
-            <Text style={styles.urgentText}>{urgent} urgente{urgent > 1 ? "s" : ""}</Text>
+          <View style={[styles.urgentBadge, { backgroundColor: clinicColors.health.critica }]}>
+            <Text style={[styles.urgentText, { color: colors.onPrimary }]}>{urgent} urgente{urgent > 1 ? "s" : ""}</Text>
           </View>
         )}
       </View>
 
-      <DayStrip
-        days={days}
-        selected={selectedDate}
-        todayIso={ISO_TODAY}
-        onSelect={setSelectedDate}
-        markFor={(iso) => ({
-          primary: recommendedDays.has(iso),
-          secondary: doneDays.has(iso),
-        })}
-      />
+      <View style={[styles.modeToggle, { backgroundColor: colors.surfaceCard, borderColor: colors.border }]}>
+        <Pressable
+          onPress={() => setViewMode("agenda")}
+          style={[styles.modeBtn, viewMode === "agenda" && [styles.modeBtnActive, { backgroundColor: colors.primary }]]}
+        >
+          <MaterialCommunityIcons name="calendar-month-outline" size={14} color={viewMode === "agenda" ? colors.onPrimary : colors.textSecondary} />
+          <Text style={[styles.modeBtnText, { color: viewMode === "agenda" ? colors.onPrimary : colors.textSecondary }]}>Agenda</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setViewMode("diagnosticos")}
+          style={[styles.modeBtn, viewMode === "diagnosticos" && [styles.modeBtnActive, { backgroundColor: colors.primary }]]}
+        >
+          <MaterialCommunityIcons name="clipboard-pulse-outline" size={14} color={viewMode === "diagnosticos" ? colors.onPrimary : colors.textSecondary} />
+          <Text style={[styles.modeBtnText, { color: viewMode === "diagnosticos" ? colors.onPrimary : colors.textSecondary }]}>Diagnósticos</Text>
+        </Pressable>
+      </View>
+
+      {viewMode === "agenda" ? (
+        <DayStrip
+          days={days}
+          selected={selectedDate}
+          todayIso={ISO_TODAY}
+          onSelect={setSelectedDate}
+          markFor={(iso) => ({
+            primary: recommendedDays.has(iso),
+            secondary: doneDays.has(iso),
+          })}
+        />
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+          {DIAG_FILTERS.map((f) => {
+            const count = f.key === "recientes" ? recentDiagnoses.length : plantsByStatus[f.key].length;
+            const dotColor = f.key === "recientes" ? colors.primary : f.key === "sindatos" ? colors.disabled : clinicColors.health[f.key];
+            const active = diagFilter === f.key;
+            return (
+              <Pressable
+                key={f.key}
+                onPress={() => setDiagFilter(f.key)}
+                style={[
+                  styles.filterChip,
+                  { borderColor: active ? dotColor : colors.border, backgroundColor: active ? dotColor + "1A" : colors.surfaceCard },
+                ]}
+              >
+                <View style={[styles.filterDot, { backgroundColor: dotColor }]} />
+                <Text style={[styles.filterText, { color: active ? dotColor : colors.text }]}>{f.label}</Text>
+                <Text style={[styles.filterCount, { color: colors.textSecondary }]}>{count}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
 
       {loadingHistory ? (
         <View style={styles.centered}>
           <ActivityIndicator color={colors.primary} size="large" />
         </View>
-      ) : (
+      ) : viewMode === "agenda" ? (
         <FlatList
           data={plantsForDay}
           keyExtractor={(p) => p.id}
@@ -842,23 +1134,23 @@ export default function ClinicScreen() {
           ListHeaderComponent={
             <>
               {/* Panel de salud global */}
-              <View style={[styles.globalCard, { backgroundColor: isDark ? "#0D1A0D" : "#F0FDF4", borderColor: "#BBF7D0" }]}>
+              <View style={[styles.globalCard, { backgroundColor: colors.surfaceCard, borderColor: colors.border }]}>
                 <View style={styles.globalHeader}>
                   <MaterialCommunityIcons name="dna" size={15} color={colors.primary} />
                   <Text style={[styles.globalTitle, { color: colors.textSecondary }]}>SALUD DEL JARDÍN</Text>
-                  <Text style={[styles.globalScore, { color: avgScore >= 75 ? HEALTH_COLOR.saludable : avgScore >= 45 ? HEALTH_COLOR.atencion : HEALTH_COLOR.enferma }]}>
+                  <Text style={[styles.globalScore, { color: avgScore >= 75 ? clinicColors.health.saludable : avgScore >= 45 ? clinicColors.health.atencion : clinicColors.health.enferma }]}>
                     {avgScore}/100
                   </Text>
                 </View>
-                <PulseBar score={avgScore} color={avgScore >= 75 ? HEALTH_COLOR.saludable : avgScore >= 45 ? HEALTH_COLOR.atencion : HEALTH_COLOR.enferma} />
+                <PulseBar score={avgScore} color={avgScore >= 75 ? clinicColors.health.saludable : avgScore >= 45 ? clinicColors.health.atencion : clinicColors.health.enferma} />
                 <View style={styles.globalStats}>
                   <View style={styles.globalStat}>
-                    <View style={[styles.globalDot, { backgroundColor: HEALTH_COLOR.saludable }]} />
+                    <View style={[styles.globalDot, { backgroundColor: clinicColors.health.saludable }]} />
                     <Text style={[styles.globalStatVal, { color: colors.text }]}>{healthy}</Text>
                     <Text style={[styles.globalStatLbl, { color: colors.textSecondary }]}>sanas</Text>
                   </View>
                   <View style={styles.globalStat}>
-                    <View style={[styles.globalDot, { backgroundColor: HEALTH_COLOR.atencion }]} />
+                    <View style={[styles.globalDot, { backgroundColor: clinicColors.health.atencion }]} />
                     <Text style={[styles.globalStatVal, { color: colors.text }]}>{withIssues}</Text>
                     <Text style={[styles.globalStatLbl, { color: colors.textSecondary }]}>con alerta</Text>
                   </View>
@@ -868,7 +1160,7 @@ export default function ClinicScreen() {
                     <Text style={[styles.globalStatLbl, { color: colors.textSecondary }]}>sin datos</Text>
                   </View>
                   <View style={styles.globalStat}>
-                    <View style={[styles.globalDot, { backgroundColor: "#DC2626" }]} />
+                    <View style={[styles.globalDot, { backgroundColor: clinicColors.health.critica }]} />
                     <Text style={[styles.globalStatVal, { color: colors.text }]}>{urgent}</Text>
                     <Text style={[styles.globalStatLbl, { color: colors.textSecondary }]}>urgentes</Text>
                   </View>
@@ -889,7 +1181,10 @@ export default function ClinicScreen() {
             <PlantCard
               plant={item}
               lastDiagnose={lastDiagnoses[item.id] ?? null}
-              onPress={() => setSelectedPlant(item)}
+              onPress={() => {
+                setSelectedInitialTab("estado");
+                setSelectedPlant(item);
+              }}
               colors={colors}
               isDark={isDark}
             />
@@ -905,12 +1200,71 @@ export default function ClinicScreen() {
             </View>
           }
         />
+      ) : diagFilter === "recientes" ? (
+        <FlatList
+          data={recentDiagnoses}
+          keyExtractor={(item) => item.record.id}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item }) => (
+            <RecentDiagnosisCard
+              record={item.record}
+              plant={item.plant}
+              onPress={() => {
+                setSelectedInitialTab("historial");
+                setSelectedPlant(item.plant);
+              }}
+              colors={colors}
+              isDark={isDark}
+            />
+          )}
+          ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
+          ListEmptyComponent={
+            <View style={styles.emptyWrap}>
+              <MaterialCommunityIcons name="clipboard-text-clock-outline" size={44} color={colors.textSecondary} />
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>Sin diagnósticos aún</Text>
+              <Text style={[styles.headerSub, { textAlign: "center" }]}>
+                Cuando diagnostiques una planta, aparecerá aquí.
+              </Text>
+            </View>
+          }
+        />
+      ) : (
+        <FlatList
+          data={plantsByStatus[diagFilter]}
+          keyExtractor={(p) => p.id}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item }) => (
+            <PlantCard
+              plant={item}
+              lastDiagnose={lastDiagnoses[item.id] ?? null}
+              onPress={() => {
+                setSelectedInitialTab("estado");
+                setSelectedPlant(item);
+              }}
+              colors={colors}
+              isDark={isDark}
+            />
+          )}
+          ItemSeparatorComponent={() => <View style={{ height: Spacing.sm }} />}
+          ListEmptyComponent={
+            <View style={styles.emptyWrap}>
+              <MaterialCommunityIcons name="leaf-off" size={44} color={colors.textSecondary} />
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>Nada en esta categoría</Text>
+              <Text style={[styles.headerSub, { textAlign: "center" }]}>
+                Probá con otro filtro de gravedad.
+              </Text>
+            </View>
+          }
+        />
       )}
 
       <PlantClinicModal
         plant={selectedPlant}
         visible={selectedPlant !== null}
         onClose={() => setSelectedPlant(null)}
+        initialTab={selectedInitialTab}
         colors={colors}
         isDark={isDark}
       />
@@ -926,7 +1280,7 @@ const createStyles = (colors: ThemeColors, _isDark: boolean) =>
     headerTitle: { color: colors.text, fontFamily: Typography.family, fontSize: 17, fontWeight: "800" },
     headerSub: { color: colors.textSecondary, fontFamily: Typography.family, fontSize: 11, fontWeight: "600" },
     urgentBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: BorderRadius.full },
-    urgentText: { color: "#fff", fontFamily: Typography.family, fontSize: 11, fontWeight: "800" },
+    urgentText: { fontFamily: Typography.family, fontSize: 11, fontWeight: "800" },
     list: { padding: Spacing.lg, paddingBottom: 120 },
     globalCard: { borderRadius: BorderRadius.lg, borderWidth: 1, padding: Spacing.lg, gap: Spacing.sm, marginBottom: Spacing.lg },
     globalHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
@@ -941,4 +1295,41 @@ const createStyles = (colors: ThemeColors, _isDark: boolean) =>
     sectionLabel: { fontFamily: Typography.family, fontSize: 10, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase", marginBottom: Spacing.sm },
     emptyWrap: { alignItems: "center", paddingVertical: Spacing.xl, gap: Spacing.md },
     emptyTitle: { fontFamily: Typography.family, fontSize: 15, fontWeight: "800" },
+    modeToggle: {
+      flexDirection: "row",
+      marginHorizontal: Spacing.lg,
+      marginBottom: Spacing.sm,
+      padding: 3,
+      borderRadius: BorderRadius.full,
+      borderWidth: 1,
+      gap: 3,
+    },
+    modeBtn: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 5,
+      paddingVertical: 7,
+      borderRadius: BorderRadius.full,
+    },
+    modeBtnActive: {},
+    modeBtnText: { fontFamily: Typography.family, fontSize: 12, fontWeight: "700" },
+    filterRow: {
+      paddingHorizontal: Spacing.lg,
+      paddingBottom: Spacing.sm,
+      gap: Spacing.xs,
+    },
+    filterChip: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: BorderRadius.full,
+      borderWidth: 1,
+    },
+    filterDot: { width: 7, height: 7, borderRadius: 4 },
+    filterText: { fontFamily: Typography.family, fontSize: 12, fontWeight: "700" },
+    filterCount: { fontFamily: Typography.family, fontSize: 11, fontWeight: "600" },
   });

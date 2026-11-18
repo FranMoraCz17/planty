@@ -1,6 +1,6 @@
-import { useCallback, useRef } from "react";
+import { useCallback } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Alert, Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, Modal, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import BottomSheet, {
   BottomSheetBackdrop,
@@ -10,6 +10,7 @@ import { useRouter } from "expo-router";
 import { signOut } from "firebase/auth";
 import { auth } from "@/src/firebase/firebaseConfig";
 import { useDemoData } from "@/src/data/DemoDataProvider";
+import GlassSheetBackground from "@/src/components/ui/GlassSheetBackground";
 import {
   BorderRadius,
   Spacing,
@@ -33,11 +34,10 @@ type SheetItem = {
 };
 
 export default function AccountSheet({ visible, onClose }: AccountSheetProps) {
-  const { colors, isDark } = useAppTheme();
+  const { colors, isDark, toggleTheme } = useAppTheme();
   const { currentUser } = useDemoData();
   const router = useRouter();
   const styles = createStyles(colors, isDark);
-  const sheetRef = useRef<BottomSheet>(null);
 
   const navigate = (route: string) => {
     onClose();
@@ -61,55 +61,35 @@ export default function AccountSheet({ visible, onClose }: AccountSheetProps) {
   const items: SheetItem[] = [
     {
       key: "profile",
-      icon: "account",
+      icon: "account-outline",
       label: "Mi perfil",
       description: "Colección, sitios y estadísticas",
       color: colors.primary,
-      onPress: () => navigate("/(app)/profile-details"),
+      onPress: () => navigate("/(app)/(tabs)/profile"),
     },
     {
       key: "chat",
-      icon: "message-text",
+      icon: "message-text-outline",
       label: "Mensajería",
       description: "Chat de la comunidad en tiempo real",
-      color: "#3B82F6",
+      color: colors.accentCool,
       onPress: () => navigate("/(app)/chat"),
     },
     {
-      key: "edit",
-      icon: "pencil",
-      label: "Editar cuenta",
-      description: "Nombre, usuario, ciudad",
-      color: "#A855F7",
-      onPress: () => navigate("/(app)/forms/user"),
+      key: "favorites",
+      icon: "heart-outline",
+      label: "Notas favoritas",
+      description: "Datos curiosos guardados",
+      color: colors.error,
+      onPress: () => navigate("/(app)/favorites"),
     },
     {
       key: "settings",
-      icon: "cog",
+      icon: "cog-outline",
       label: "Configuración",
-      description: "Tema, accesibilidad, permisos",
-      color: "#6B7280",
+      description: "Cuenta, accesibilidad, permisos",
+      color: colors.textSecondary,
       onPress: () => navigate("/(app)/settings"),
-    },
-    {
-      key: "privacy",
-      icon: "lock",
-      label: "Privacidad y seguridad",
-      description: "Datos y permisos del sistema",
-      color: "#0EA5E9",
-      onPress: () => navigate("/(app)/settings"),
-    },
-    {
-      key: "about",
-      icon: "information",
-      label: "Acerca de Planty",
-      description: "Versión 1.0",
-      color: "#64748B",
-      onPress: () =>
-        Alert.alert(
-          "Planty",
-          "franmorac17"
-        ),
     },
   ];
 
@@ -119,7 +99,7 @@ export default function AccountSheet({ visible, onClose }: AccountSheetProps) {
         {...props}
         appearsOnIndex={0}
         disappearsOnIndex={-1}
-        opacity={0.5}
+        opacity={0.4}
         pressBehavior="close"
       />
     ),
@@ -132,14 +112,15 @@ export default function AccountSheet({ visible, onClose }: AccountSheetProps) {
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
       <GestureHandlerRootView style={styles.root}>
         <BottomSheet
-          ref={sheetRef}
           index={0}
           enableDynamicSizing
           enablePanDownToClose
           onClose={onClose}
           backdropComponent={renderBackdrop}
-          backgroundStyle={{ backgroundColor: colors.surface }}
-          handleIndicatorStyle={{ backgroundColor: colors.border, width: 42 }}
+          backgroundComponent={(props) => (
+            <GlassSheetBackground {...props} isDark={isDark} />
+          )}
+          handleIndicatorStyle={styles.handle}
         >
           <BottomSheetView style={styles.content}>
             {/* Header */}
@@ -169,9 +150,9 @@ export default function AccountSheet({ visible, onClose }: AccountSheetProps) {
               </View>
             </View>
 
-            {/* Grupo principal (estilo iOS) */}
+            {/* Grupo principal */}
             <View style={styles.card}>
-              {items.map((item, index) => (
+              {items.map((item) => (
                 <Pressable
                   key={item.key}
                   accessibilityRole="button"
@@ -179,8 +160,8 @@ export default function AccountSheet({ visible, onClose }: AccountSheetProps) {
                   onPress={item.onPress}
                   style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
                 >
-                  <View style={[styles.iconSquircle, { backgroundColor: item.color }]}>
-                    <MaterialCommunityIcons name={item.icon} size={17} color="#fff" />
+                  <View style={[styles.iconSquircle, { backgroundColor: item.color + "1C" }]}>
+                    <MaterialCommunityIcons name={item.icon} size={18} color={item.color} />
                   </View>
                   <View style={styles.rowText}>
                     <Text style={styles.rowLabel}>{item.label}</Text>
@@ -193,9 +174,37 @@ export default function AccountSheet({ visible, onClose }: AccountSheetProps) {
                     size={18}
                     color={colors.textSecondary}
                   />
-                  {index < items.length - 1 ? <View style={styles.divider} /> : null}
+                  <View style={styles.divider} />
                 </Pressable>
               ))}
+
+              {/* Toggle de modo oscuro, integrado en el mismo grupo */}
+              <View style={styles.row}>
+                <View
+                  style={[
+                    styles.iconSquircle,
+                    { backgroundColor: colors.accentCool + "1C" },
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name={isDark ? "weather-night" : "weather-sunny"}
+                    size={18}
+                    color={colors.accentCool}
+                  />
+                </View>
+                <View style={styles.rowText}>
+                  <Text style={styles.rowLabel}>Modo oscuro</Text>
+                  <Text style={styles.rowDescription}>
+                    {isDark ? "Activado" : "Desactivado"}
+                  </Text>
+                </View>
+                <Switch
+                  value={isDark}
+                  onValueChange={toggleTheme}
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
             </View>
 
             {/* Cerrar sesión */}
@@ -203,11 +212,9 @@ export default function AccountSheet({ visible, onClose }: AccountSheetProps) {
               accessibilityRole="button"
               accessibilityLabel="Cerrar sesión"
               onPress={handleSignOut}
-              style={({ pressed }) => [styles.signoutCard, pressed && styles.rowPressed]}
+              style={({ pressed }) => [styles.signoutCard, pressed && { opacity: 0.75 }]}
             >
-              <View style={[styles.iconSquircle, { backgroundColor: "#DC2626" }]}>
-                <MaterialCommunityIcons name="logout" size={17} color="#fff" />
-              </View>
+              <MaterialCommunityIcons name="logout" size={16} color={colors.error} />
               <Text style={styles.signoutText}>Cerrar sesión</Text>
             </Pressable>
           </BottomSheetView>
@@ -224,6 +231,10 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       paddingHorizontal: Spacing.lg,
       paddingBottom: Spacing.xxl,
       gap: Spacing.md,
+    },
+    handle: {
+      backgroundColor: isDark ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.25)",
+      width: 40,
     },
     header: {
       flexDirection: "row",
@@ -255,10 +266,10 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       fontSize: Typography.caption.fontSize + 1,
     },
     card: {
-      backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.md,
+      backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.4)",
+      borderRadius: BorderRadius.lg,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
+      borderColor: isDark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.06)",
       overflow: "hidden",
     },
     row: {
@@ -269,19 +280,19 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       paddingHorizontal: Spacing.md,
       position: "relative",
     },
-    rowPressed: { backgroundColor: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)" },
+    rowPressed: { backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.04)" },
     divider: {
       position: "absolute",
-      left: Spacing.md + 30 + Spacing.md,
+      left: Spacing.md + 34 + Spacing.md,
       right: 0,
       bottom: 0,
       height: StyleSheet.hairlineWidth,
       backgroundColor: colors.border,
     },
     iconSquircle: {
-      width: 30,
-      height: 30,
-      borderRadius: 7,
+      width: 34,
+      height: 34,
+      borderRadius: BorderRadius.md,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -300,18 +311,18 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
     signoutCard: {
       flexDirection: "row",
       alignItems: "center",
-      gap: Spacing.md,
-      backgroundColor: colors.surfaceCard,
-      borderRadius: BorderRadius.md,
+      justifyContent: "center",
+      gap: 6,
+      paddingVertical: Spacing.md,
+      borderRadius: BorderRadius.full,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-      paddingVertical: 11,
-      paddingHorizontal: Spacing.md,
+      borderColor: isDark ? "rgba(225,120,107,0.4)" : "rgba(166,58,46,0.3)",
+      backgroundColor: isDark ? "rgba(225,120,107,0.08)" : "rgba(166,58,46,0.05)",
     },
     signoutText: {
-      color: "#DC2626",
+      color: colors.error,
       fontFamily: Typography.family,
-      fontSize: Typography.body.fontSize,
+      fontSize: 14,
       fontWeight: "700",
     },
   });

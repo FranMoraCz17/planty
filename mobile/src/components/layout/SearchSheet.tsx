@@ -179,9 +179,17 @@ function ResultRow({
   onPress: () => void;
 }) {
   const styles = createStyles(colors, isDark);
-  const [photo, setPhoto] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<string | null>(() => {
+    const cached = PlantPhotoService.getCached(item.scientificName);
+    return cached !== undefined ? cached : null;
+  });
 
   useEffect(() => {
+    const cached = PlantPhotoService.getCached(item.scientificName);
+    if (cached !== undefined) {
+      setPhoto(cached);
+      return;
+    }
     let cancelled = false;
     void PlantPhotoService.fetchSpeciesPhoto(item.scientificName).then(
       (url) => {

@@ -1,15 +1,13 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Image, Platform, StyleSheet, View } from "react-native";
+import { Image, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import BottomSheet, {
-  BottomSheetScrollView,
-  type BottomSheetBackgroundProps,
-} from "@gorhom/bottom-sheet";
-import { BlurView } from "expo-blur";
+import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { LinearGradient } from "expo-linear-gradient";
 import GlassIconButton from "./GlassIconButton";
+import GlassSheetBackground from "./GlassSheetBackground";
+import ImageBleedFade from "./ImageBleedFade";
 import { Spacing, type ThemeColors } from "@/src/theme/designSystem";
 import { useAppTheme } from "@/src/theme/ThemeProvider";
 
@@ -65,11 +63,18 @@ export default function PhotoDetailSheet({
     <GestureHandlerRootView style={styles.root}>
       {/* Foto de fondo a pantalla completa */}
       {activeUri ? (
-        <Image
-          source={{ uri: activeUri }}
-          style={styles.bg}
-          onError={() => setSourceIndex((i) => i + 1)}
-        />
+        <>
+          <Image
+            source={{ uri: activeUri }}
+            style={styles.bg}
+            onError={() => setSourceIndex((i) => i + 1)}
+          />
+          <ImageBleedFade
+            uri={activeUri}
+            fadeColor={colors.surface}
+            style={styles.bleed}
+          />
+        </>
       ) : (
         <View style={[styles.bg, styles.bgPlaceholder]}>
           <MaterialCommunityIcons
@@ -110,7 +115,7 @@ export default function PhotoDetailSheet({
         handleIndicatorStyle={styles.handle}
         enableDynamicSizing={false}
         backgroundComponent={(props) => (
-          <SheetGlassBackground {...props} isDark={isDark} />
+          <GlassSheetBackground {...props} isDark={isDark} />
         )}
       >
         <BottomSheetScrollView
@@ -123,40 +128,6 @@ export default function PhotoDetailSheet({
     </GestureHandlerRootView>
   );
 }
-
-function SheetGlassBackground({
-  style,
-  isDark,
-}: BottomSheetBackgroundProps & { isDark: boolean }) {
-  return (
-    <View style={[style, sheetBgStyles.bg]}>
-      <BlurView
-        intensity={Platform.OS === "ios" ? 50 : 90}
-        tint={isDark ? "dark" : "light"}
-        style={StyleSheet.absoluteFill}
-      />
-      <View
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            backgroundColor: isDark
-              ? "rgba(12,14,11,0.55)"
-              : "rgba(244,241,234,0.6)",
-          },
-        ]}
-      />
-    </View>
-  );
-}
-
-const sheetBgStyles = StyleSheet.create({
-  bg: {
-    overflow: "hidden",
-    // Esquinas superiores redondeadas: la foto "sigue" tras la hoja (efecto yate).
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-  },
-});
 
 const createStyles = (colors: ThemeColors, isDark: boolean) =>
   StyleSheet.create({
@@ -173,6 +144,10 @@ const createStyles = (colors: ThemeColors, isDark: boolean) =>
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: colors.primary,
+    },
+    bleed: {
+      top: "65%",
+      bottom: 0,
     },
     scrim: {
       position: "absolute",
