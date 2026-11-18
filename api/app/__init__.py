@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -5,11 +7,14 @@ from .config import get_settings
 from .routers import diagnose, diagnoses, health, identify, plants, species, users
 
 
+VERSION = (Path(__file__).resolve().parents[1] / "VERSION").read_text().strip()
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
         title="Planty API",
-        version="2.0.0",
+        version=VERSION,
         description="API REST para la app Planty — gestión de plantas con Firebase y Gemini Vision.",
     )
 

@@ -1,0 +1,51 @@
+# Pipeline de la API de Planty.
+# Fase actual: en cada pull request se prueba la API y se construye su imagen.
+# Todavía no se publica nada. La publicación en ECR y el despliegue vienen después.
+
+image: python:3.12-slim
+
+definitions:
+  caches:
+    pip-api: ~/.cache/pip
+
+  steps:
+    - step: &probar-api
+        name: Probar API
+        caches:
+          - pip-api
+        condition:
+          changesets:
+            includePaths:
+              - "api/**"
+              - "bitbucket-pipelines.yml"
+        script:
+          - cd api
+          - pip install -r requirements-dev.txt
+          - python -m pytest -q
+
+    - step: &construir-api
+        name: Construir imagen de la API
+        services:
+          - docker
+        condition:
+          changesets:
+            includePaths:
+              - "api/**"
+              - "bitbucket-pipelines.yml"
+        script:
+          - export VERSION=$(cat api/VERSION)
+          - export TAG="${VERSION}-${BITBUCKET_COMMIT:0:7}"
+          - echo "Etiqueta de la imagen planty-api:${TAG}"
+          - docker build -t planty-api:${TAG} api/
+          - docker run --rm planty-api:${TAG} id -u
+
+pipelines:
+  pull-requests:
+    "**":
+      - step: *probar-api
+      - step: *construir-api
+
+  branches:
+    develop:
+      - step: *probar-api
+      - step: *construir-api
